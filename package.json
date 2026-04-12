@@ -1,6 +1,6 @@
 {
   "name": "opensea-print-server",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "OpenSea Print Server — Conecte impressoras ao OpenSea remotamente",
   "main": "dist/main/main.js",
   "author": {
@@ -54,6 +54,7 @@
   "build": {
     "appId": "com.opensea.print-server",
     "productName": "OpenSea Print Server",
+    "artifactName": "OpenSea-PrintServer-Setup-${version}.${ext}",
     "directories": {
       "output": "release"
     },

@@ -104,6 +104,19 @@ function updateTrayMenu(isOnline: boolean): void {
       label: statusLabel,
       enabled: false,
     },
+    {
+      label: `Versão ${app.getVersion()}`,
+      enabled: false,
+    },
+    { type: 'separator' },
+    {
+      label: 'Verificar Atualizações',
+      click: () => {
+        checkForUpdates().catch((err) => {
+          log.error('[tray] Erro ao verificar atualizações:', err);
+        });
+      },
+    },
     { type: 'separator' },
     {
       label: 'Sair',

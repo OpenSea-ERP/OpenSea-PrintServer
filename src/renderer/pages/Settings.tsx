@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { ArrowLeft, Download, Info, RefreshCw, Waves } from 'lucide-react';
 import { Toggle } from '../components/Toggle';
 import { cn } from '../utils';
-import { invokeIpc } from '../hooks/useIpc';
+import { invokeIpc, useIpcEvent } from '../hooks/useIpc';
 import type { UpdateStatus } from '../preload';
 
 interface SettingsProps {
@@ -54,15 +54,20 @@ export function Settings({ onBack }: SettingsProps) {
     }
   }, []);
 
+  // Listen to updater events from main process
+  useIpcEvent<UpdateStatus>('updater:status', useCallback((data: UpdateStatus) => {
+    const status = data.status === 'up-to-date' ? 'not-available' : data.status;
+    setUpdateStatus({ ...data, status: status as UpdateStatus['status'] });
+    if (status !== 'checking' && status !== 'downloading') {
+      setCheckingUpdate(false);
+    }
+  }, []));
+
   const handleCheckUpdate = useCallback(async () => {
     setCheckingUpdate(true);
     setUpdateStatus({ status: 'checking' });
     try {
       await invokeIpc('updater:check');
-      setTimeout(() => {
-        setCheckingUpdate(false);
-        setUpdateStatus((prev) => prev.status === 'checking' ? { status: 'not-available' } : prev);
-      }, 3000);
     } catch {
       setCheckingUpdate(false);
       setUpdateStatus({ status: 'error', error: 'Falha ao verificar' });
@@ -128,6 +133,7 @@ export function Settings({ onBack }: SettingsProps) {
                   {updateStatus.status === 'not-available' && 'Você está na versão mais recente'}
                   {updateStatus.status === 'checking' && 'Verificando...'}
                   {updateStatus.status === 'available' && `Versão ${updateStatus.version} disponível`}
+                  {updateStatus.status === 'downloading' && `Baixando... ${Math.round(updateStatus.progress ?? 0)}%`}
                   {updateStatus.status === 'downloaded' && 'Atualização pronta para instalar'}
                   {updateStatus.status === 'error' && (updateStatus.error || 'Erro ao verificar')}
                 </p>

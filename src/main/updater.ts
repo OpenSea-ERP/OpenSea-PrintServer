@@ -38,7 +38,7 @@ function setupUpdater(): void {
     log.info(`[updater] Download: ${Math.round(progress.percent)}%`);
     sendStatusToRenderer('updater:status', {
       status: 'downloading',
-      percent: progress.percent,
+      progress: progress.percent,
     });
   });
 
@@ -54,7 +54,7 @@ function setupUpdater(): void {
     log.error('[updater] Erro na atualização:', error);
     sendStatusToRenderer('updater:status', {
       status: 'error',
-      message: error?.message ?? 'Erro desconhecido',
+      error: error?.message ?? 'Erro desconhecido',
     });
   });
 }
