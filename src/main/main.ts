@@ -23,6 +23,7 @@ function createWindow(): BrowserWindow {
     height: 620,
     resizable: false,
     frame: true,
+    autoHideMenuBar: true,
     titleBarStyle: 'default',
     icon: getAssetPath('icon.png'),
     webPreferences: {
@@ -134,6 +135,8 @@ if (!gotTheLock) {
 
   app.on('ready', async () => {
     log.info('[main] Aplicação pronta');
+
+    Menu.setApplicationMenu(null);
 
     registerIpcHandlers();
     setupUpdater();

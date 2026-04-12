@@ -11,8 +11,10 @@ import {
   Usb,
   Globe,
   FileText,
+  Waves,
 } from 'lucide-react';
 import { StatusDot } from '../components/StatusDot';
+import { cn } from '../utils';
 import { useIpc, invokeIpc } from '../hooks/useIpc';
 import type { AgentStatus, PrinterInfo } from '../preload';
 
@@ -25,19 +27,13 @@ interface DashboardProps {
 
 function getPrinterTypeBadge(printer: PrinterInfo) {
   const name = (printer.name + ' ' + (printer.description || '')).toLowerCase();
-
-  if (
-    name.includes('pdf') ||
-    name.includes('xps') ||
-    name.includes('onenote') ||
-    name.includes('fax')
-  ) {
-    return { label: 'Virtual', icon: FileText, color: 'bg-purple-50 text-purple-700 border-purple-200' };
+  if (name.includes('pdf') || name.includes('xps') || name.includes('onenote') || name.includes('fax')) {
+    return { label: 'Virtual', icon: FileText, color: 'bg-violet-500/10 text-violet-400 border-violet-500/20' };
   }
   if (name.includes('network') || name.includes('\\\\') || name.includes('tcp')) {
-    return { label: 'Rede', icon: Globe, color: 'bg-sky-50 text-sky-700 border-sky-200' };
+    return { label: 'Rede', icon: Globe, color: 'bg-sky-500/10 text-sky-400 border-sky-500/20' };
   }
-  return { label: 'Local', icon: Usb, color: 'bg-gray-50 text-gray-600 border-gray-200' };
+  return { label: 'Local', icon: Usb, color: 'bg-slate-500/10 text-slate-400 border-slate-500/20' };
 }
 
 export function Dashboard({ status, onRefreshStatus, onOpenSettings, onUnpair }: DashboardProps) {
@@ -70,26 +66,18 @@ export function Dashboard({ status, onRefreshStatus, onOpenSettings, onUnpair }:
     }
   }, [unpairConfirm, onUnpair]);
 
-  const pairedDate = status.pairedAt
-    ? new Date(status.pairedAt).toLocaleDateString('pt-BR', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-      })
-    : null;
-
   const printerList = printers ?? [];
 
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
         <div className="flex items-center gap-2.5">
           <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
-            <Printer className="h-4 w-4 text-white" />
+            <Waves className="h-4 w-4 text-white" strokeWidth={2} />
           </div>
           <div>
-            <h1 className="text-sm font-bold text-gray-900 leading-none">
+            <h1 className="text-sm font-bold text-slate-100 leading-none">
               OpenSea Print Server
             </h1>
             <div className="flex items-center gap-1.5 mt-1">
@@ -98,7 +86,7 @@ export function Dashboard({ status, onRefreshStatus, onOpenSettings, onUnpair }:
                 size="sm"
                 pulse={status.connected}
               />
-              <span className={`text-xs font-medium ${status.connected ? 'text-emerald-600' : 'text-gray-400'}`}>
+              <span className={cn('text-xs font-medium', status.connected ? 'text-emerald-400' : 'text-slate-500')}>
                 {status.connected ? 'Conectado' : 'Desconectado'}
               </span>
             </div>
@@ -109,51 +97,49 @@ export function Dashboard({ status, onRefreshStatus, onOpenSettings, onUnpair }:
       {/* Content */}
       <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
         {/* Agent Info Card */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+        <div className="bg-slate-800/60 rounded-xl border border-slate-700/50 p-4">
           <div className="flex items-center gap-3 mb-3">
-            <div className="h-9 w-9 rounded-lg bg-blue-50 flex items-center justify-center">
-              <Monitor className="h-4 w-4 text-blue-600" />
+            <div className="h-9 w-9 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
+              <Monitor className="h-4 w-4 text-blue-400" />
             </div>
             <div className="flex-1 min-w-0">
-              <h3 className="text-sm font-semibold text-gray-900 truncate">
+              <h3 className="text-sm font-semibold text-slate-200 truncate">
                 {status.computerName || 'Computador'}
               </h3>
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-slate-500">
                 {status.agentId ? `ID: ${status.agentId.slice(0, 8)}...` : 'Agente local'}
               </p>
             </div>
-            <div className={`h-8 w-8 rounded-lg flex items-center justify-center ${
-              status.connected ? 'bg-emerald-50' : 'bg-gray-50'
-            }`}>
+            <div className={cn(
+              'h-8 w-8 rounded-lg flex items-center justify-center border',
+              status.connected
+                ? 'bg-emerald-500/10 border-emerald-500/20'
+                : 'bg-slate-700/50 border-slate-600/50',
+            )}>
               {status.connected ? (
-                <Wifi className="h-4 w-4 text-emerald-500" />
+                <Wifi className="h-4 w-4 text-emerald-400" />
               ) : (
-                <WifiOff className="h-4 w-4 text-gray-400" />
+                <WifiOff className="h-4 w-4 text-slate-500" />
               )}
             </div>
           </div>
-          <div className="flex items-center gap-4 text-xs text-gray-500">
-            {status.ipAddress && (
-              <div className="flex items-center gap-1">
-                <Network className="h-3 w-3" />
-                <span>{status.ipAddress}</span>
-              </div>
-            )}
-            {pairedDate && (
-              <span>Vinculado em {pairedDate}</span>
-            )}
-          </div>
+          {status.ipAddress && (
+            <div className="flex items-center gap-1 text-xs text-slate-500">
+              <Network className="h-3 w-3" />
+              <span>{status.ipAddress}</span>
+            </div>
+          )}
         </div>
 
         {/* Printers Section */}
         <div>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <h2 className="text-sm font-semibold text-gray-900">
+              <h2 className="text-sm font-semibold text-slate-200">
                 Impressoras Detectadas
               </h2>
               {!printersLoading && (
-                <span className="inline-flex items-center justify-center h-5 min-w-5 px-1.5 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">
+                <span className="inline-flex items-center justify-center h-5 min-w-5 px-1.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 text-xs font-bold">
                   {printerList.length}
                 </span>
               )}
@@ -163,57 +149,53 @@ export function Dashboard({ status, onRefreshStatus, onOpenSettings, onUnpair }:
               disabled={refreshing}
               className="
                 h-8 px-3 flex items-center gap-1.5
-                text-xs font-medium text-gray-600
-                bg-white border border-gray-200 rounded-lg
-                hover:bg-gray-50 active:bg-gray-100
+                text-xs font-medium text-slate-400
+                bg-slate-800/60 border border-slate-700/50 rounded-lg
+                hover:bg-slate-800 hover:border-slate-600 hover:text-slate-300
                 disabled:opacity-50 disabled:pointer-events-none
                 transition-colors
               "
             >
-              <RefreshCw className={`h-3 w-3 ${refreshing ? 'animate-spin' : ''}`} />
+              <RefreshCw className={cn('h-3 w-3', refreshing && 'animate-spin')} />
               Verificar
             </button>
           </div>
 
-          {/* Printer List */}
           {printersLoading ? (
-            <div className="bg-white rounded-xl border border-gray-200 p-8 flex items-center justify-center">
-              <div className="h-5 w-5 rounded-full border-2 border-gray-200 border-t-blue-600 animate-spin" />
+            <div className="bg-slate-800/60 rounded-xl border border-slate-700/50 p-8 flex items-center justify-center">
+              <div className="h-5 w-5 rounded-full border-2 border-slate-700 border-t-blue-500 animate-spin" />
             </div>
           ) : printerList.length === 0 ? (
-            <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
-              <Printer className="h-8 w-8 text-gray-300 mx-auto mb-2" />
-              <p className="text-sm text-gray-500">Nenhuma impressora detectada</p>
-              <p className="text-xs text-gray-400 mt-1">
+            <div className="bg-slate-800/60 rounded-xl border border-slate-700/50 p-8 text-center">
+              <Printer className="h-8 w-8 text-slate-600 mx-auto mb-2" />
+              <p className="text-sm text-slate-400">Nenhuma impressora detectada</p>
+              <p className="text-xs text-slate-600 mt-1">
                 Verifique se as impressoras estão instaladas no sistema
               </p>
             </div>
           ) : (
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm divide-y divide-gray-100">
+            <div className="bg-slate-800/60 rounded-xl border border-slate-700/50 divide-y divide-slate-700/50">
               {printerList.map((printer) => {
                 const badge = getPrinterTypeBadge(printer);
                 const BadgeIcon = badge.icon;
                 return (
-                  <div
-                    key={printer.name}
-                    className="flex items-center gap-3 px-4 py-3"
-                  >
-                    <div className="h-8 w-8 rounded-lg bg-gray-50 flex items-center justify-center flex-shrink-0">
-                      <Printer className="h-4 w-4 text-gray-500" />
+                  <div key={printer.name} className="flex items-center gap-3 px-4 py-3">
+                    <div className="h-8 w-8 rounded-lg bg-slate-700/50 flex items-center justify-center flex-shrink-0">
+                      <Printer className="h-4 w-4 text-slate-400" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-gray-900 truncate">
+                        <span className="text-sm font-medium text-slate-200 truncate">
                           {printer.displayName || printer.name}
                         </span>
                         {printer.isDefault && (
-                          <span className="inline-flex items-center h-5 px-1.5 rounded text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 flex-shrink-0">
+                          <span className="inline-flex items-center h-5 px-1.5 rounded text-[10px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 flex-shrink-0">
                             Padrão
                           </span>
                         )}
                       </div>
                       <div className="flex items-center gap-2 mt-0.5">
-                        <span className={`inline-flex items-center gap-1 h-4 px-1.5 rounded text-[10px] font-medium border ${badge.color}`}>
+                        <span className={cn('inline-flex items-center gap-1 h-4 px-1.5 rounded text-[10px] font-medium border', badge.color)}>
                           <BadgeIcon className="h-2.5 w-2.5" />
                           {badge.label}
                         </span>
@@ -232,14 +214,14 @@ export function Dashboard({ status, onRefreshStatus, onOpenSettings, onUnpair }:
       </div>
 
       {/* Footer */}
-      <div className="flex items-center gap-2 px-5 py-3 border-t border-gray-100 bg-white">
+      <div className="flex items-center gap-2 px-5 py-3 border-t border-slate-800">
         <button
           onClick={onOpenSettings}
           className="
             flex-1 h-9 flex items-center justify-center gap-1.5
-            text-xs font-medium text-gray-700
-            bg-gray-50 border border-gray-200 rounded-lg
-            hover:bg-gray-100 active:bg-gray-200
+            text-xs font-medium text-slate-300
+            bg-slate-800/60 border border-slate-700/50 rounded-lg
+            hover:bg-slate-800 hover:border-slate-600
             transition-colors
           "
         >
@@ -248,16 +230,13 @@ export function Dashboard({ status, onRefreshStatus, onOpenSettings, onUnpair }:
         </button>
         <button
           onClick={handleUnpair}
-          className={`
-            flex-1 h-9 flex items-center justify-center gap-1.5
-            text-xs font-medium rounded-lg border
-            transition-all duration-200
-            ${
-              unpairConfirm
-                ? 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100'
-                : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
-            }
-          `}
+          className={cn(
+            'flex-1 h-9 flex items-center justify-center gap-1.5',
+            'text-xs font-medium rounded-lg border transition-all duration-200',
+            unpairConfirm
+              ? 'bg-rose-500/10 border-rose-500/20 text-rose-400 hover:bg-rose-500/20'
+              : 'bg-slate-800/60 border-slate-700/50 text-slate-300 hover:bg-slate-800 hover:border-slate-600',
+          )}
         >
           <Unlink className="h-3.5 w-3.5" />
           {unpairConfirm ? 'Confirmar?' : 'Desvincular'}

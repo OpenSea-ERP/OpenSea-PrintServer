@@ -31,6 +31,7 @@
     "ws": "^8.16.0"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.2.2",
     "@types/auto-launch": "^5.0.5",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

@@ -1,40 +1,35 @@
-interface StatusDotProps {
-  status: 'online' | 'offline' | 'warning' | 'idle';
-  size?: 'sm' | 'md' | 'lg';
-  pulse?: boolean;
-}
+import { cn } from '../utils';
 
-const colorMap = {
+type Status = 'online' | 'offline' | 'warning' | 'error';
+type Size = 'sm' | 'md' | 'lg';
+
+const STATUS_COLORS: Record<Status, string> = {
   online: 'bg-emerald-500',
-  offline: 'bg-gray-400',
+  offline: 'bg-slate-500',
   warning: 'bg-amber-500',
-  idle: 'bg-blue-400',
-} as const;
+  error: 'bg-rose-500',
+};
 
-const pulseColorMap = {
-  online: 'bg-emerald-400',
-  offline: 'bg-gray-300',
-  warning: 'bg-amber-400',
-  idle: 'bg-blue-300',
-} as const;
-
-const sizeMap = {
+const SIZES: Record<Size, string> = {
   sm: 'h-2 w-2',
   md: 'h-2.5 w-2.5',
   lg: 'h-3 w-3',
-} as const;
+};
 
-export function StatusDot({ status, size = 'md', pulse = false }: StatusDotProps) {
+interface StatusDotProps {
+  status: Status;
+  size?: Size;
+  pulse?: boolean;
+  className?: string;
+}
+
+export function StatusDot({ status, size = 'md', pulse = false, className }: StatusDotProps) {
   return (
-    <span className="relative inline-flex">
+    <span className={cn('relative inline-flex', className)}>
       {pulse && status === 'online' && (
-        <span
-          className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-75 ${pulseColorMap[status]}`}
-        />
+        <span className={cn('absolute inline-flex rounded-full opacity-40 animate-ping', SIZES[size], STATUS_COLORS[status])} />
       )}
-      <span
-        className={`relative inline-flex rounded-full ${sizeMap[size]} ${colorMap[status]}`}
-      />
+      <span className={cn('relative inline-flex rounded-full', SIZES[size], STATUS_COLORS[status])} />
     </span>
   );
 }

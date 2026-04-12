@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow } from 'electron';
+import { ipcMain, BrowserWindow, app } from 'electron';
 import log from 'electron-log';
 import { store, StoreSchema } from './store';
 import { checkForUpdates, quitAndInstall } from './updater';
@@ -32,12 +32,14 @@ function registerIpcHandlers(): void {
       const agentName = store.get('agentName');
       return {
         paired: agentId !== null,
-        agentId,
-        agentName,
+        agentId: agentId ?? undefined,
+        computerName: agentName ?? '',
+        ipAddress: '',
+        connected: false,
       };
     } catch (error) {
       log.error('[ipc] agent:get-status erro:', error);
-      return { paired: false, agentId: null, agentName: null };
+      return { paired: false, connected: false, computerName: '', ipAddress: '' };
     }
   });
 
@@ -168,6 +170,11 @@ function registerIpcHandlers(): void {
       log.error('[ipc] auto-launch:toggle erro:', message);
       return { success: false, error: message };
     }
+  });
+
+  // ── App Info ──────────────────────────────────────────────────────────
+  ipcMain.handle('app:get-version', () => {
+    return app.getVersion();
   });
 
   log.info('[ipc] Todos os handlers IPC registrados');

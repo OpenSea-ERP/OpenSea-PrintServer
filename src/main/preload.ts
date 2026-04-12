@@ -6,6 +6,18 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 contextBridge.exposeInMainWorld('electronAPI', {
+  // Generic invoke (used by useIpc hook)
+  invoke: (channel: string, ...args: unknown[]) =>
+    ipcRenderer.invoke(channel, ...args),
+
+  // Generic event listener (used by useIpcEvent hook)
+  on: (channel: string, callback: (...args: unknown[]) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, ...args: unknown[]) =>
+      callback(...args);
+    ipcRenderer.on(channel, handler);
+    return () => ipcRenderer.removeListener(channel, handler);
+  },
+
   // Store
   getStore: (key: string) => ipcRenderer.invoke('store:get', key),
   setStore: (key: string, value: unknown) =>
