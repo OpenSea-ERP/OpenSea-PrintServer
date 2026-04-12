@@ -26,13 +26,13 @@ export function PairingFlow({ onBack, onSuccess }: PairingFlowProps) {
 
   const handleInput = useCallback(
     (index: number, value: string) => {
-      const digit = value.replace(/\D/g, '').slice(-1);
+      const char = value.replace(/[^a-zA-Z0-9]/g, '').slice(-1).toUpperCase();
       setDigits((prev) => {
         const next = [...prev];
-        next[index] = digit;
+        next[index] = char;
         return next;
       });
-      if (digit && index < 5) {
+      if (char && index < 5) {
         inputRefs.current[index + 1]?.focus();
       }
     },
@@ -55,7 +55,7 @@ export function PairingFlow({ onBack, onSuccess }: PairingFlowProps) {
 
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
     e.preventDefault();
-    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    const pasted = e.clipboardData.getData('text').replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 6);
     if (!pasted) return;
     const newDigits = [...Array(6)].map((_, i) => pasted[i] || '');
     setDigits(newDigits);
@@ -128,7 +128,7 @@ export function PairingFlow({ onBack, onSuccess }: PairingFlowProps) {
                   key={i}
                   ref={(el) => { inputRefs.current[i] = el; }}
                   type="text"
-                  inputMode="numeric"
+                  inputMode="text"
                   maxLength={1}
                   value={digit}
                   disabled={state === 'loading'}
