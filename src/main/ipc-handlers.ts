@@ -111,9 +111,7 @@ function registerIpcHandlers(): void {
       if (windows.length === 0) {
         return [];
       }
-      const printers = windows[0].webContents.getPrintersAsync
-        ? await windows[0].webContents.getPrintersAsync()
-        : [];
+      const printers = await windows[0].webContents.getPrintersAsync();
 
       return printers.map((p) => ({
         name: p.name,
