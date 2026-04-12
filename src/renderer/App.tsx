@@ -44,7 +44,7 @@ export function App() {
 
   return (
     <div className="h-full flex flex-col bg-slate-900 overflow-hidden">
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-hidden">
         {view === 'loading' && <LoadingScreen />}
         {view === 'empty' && (
           <EmptyState onStartPairing={() => setView('pairing')} />

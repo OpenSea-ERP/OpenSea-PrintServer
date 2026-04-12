@@ -1,29 +1,29 @@
-import { useState, useEffect } from 'react';
-import { Printer, Waves, ArrowRight } from 'lucide-react';
-import { invokeIpc } from '../hooks/useIpc';
+import { ArrowRight, Printer, Waves } from "lucide-react";
+import { useEffect, useState } from "react";
+import { invokeIpc } from "../hooks/useIpc";
 
 interface EmptyStateProps {
   onStartPairing: () => void;
 }
 
 export function EmptyState({ onStartPairing }: EmptyStateProps) {
-  const [version, setVersion] = useState('1.0.0');
+  const [version, setVersion] = useState("1.0.0");
 
   useEffect(() => {
-    invokeIpc<string>('app:get-version')
+    invokeIpc<string>("app:get-version")
       .then((v) => setVersion(v))
       .catch(() => {});
   }, []);
 
   return (
-    <div className="h-full flex flex-col items-center justify-center px-8 text-center relative">
+    <div className="h-full flex flex-col items-center justify-center px-8 text-center relative overflow-hidden">
       {/* Background decorations */}
-      <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 rounded-full -translate-y-1/2 translate-x-1/2" />
-      <div className="absolute bottom-0 left-0 w-48 h-48 bg-indigo-500/5 rounded-full translate-y-1/2 -translate-x-1/2" />
+      <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 rounded-full -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+      <div className="absolute bottom-0 left-0 w-48 h-48 bg-indigo-500/5 rounded-full translate-y-1/2 -translate-x-1/2 pointer-events-none" />
 
       <div className="relative z-10 flex flex-col items-center">
         {/* Logo */}
-        <div className="relative mb-8">
+        <div className="relative mb-6">
           <div className="h-20 w-20 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
             <Waves className="h-10 w-10 text-white" strokeWidth={1.8} />
           </div>
@@ -33,12 +33,12 @@ export function EmptyState({ onStartPairing }: EmptyStateProps) {
         </div>
 
         {/* Heading */}
-        <h1 className="text-xl font-bold text-slate-100 mb-2">
+        <h1 className="text-xl font-bold text-slate-100 my-4">
           Bem-vindo ao Print Server
         </h1>
 
         {/* Description */}
-        <p className="text-sm text-slate-400 leading-relaxed max-w-xs mb-10">
+        <p className="text-sm text-slate-400 leading-relaxed max-w-xs mb-8">
           Conecte este computador ao OpenSea para gerenciar e executar
           impressões remotamente.
         </p>

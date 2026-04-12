@@ -19,8 +19,8 @@ function getAssetPath(filename: string): string {
 
 function createWindow(): BrowserWindow {
   mainWindow = new BrowserWindow({
-    width: 420,
-    height: 620,
+    width: 440,
+    height: 680,
     resizable: false,
     frame: true,
     autoHideMenuBar: true,
