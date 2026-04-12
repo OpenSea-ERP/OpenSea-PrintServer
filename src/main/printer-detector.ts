@@ -71,37 +71,38 @@ export function clearPrinterCache(): void {
 
 // ── Windows ──────────────────────────────────────────────────────────────────
 
-interface WindowsPrinterRaw {
+interface Win32PrinterRaw {
   Name: string;
   PrinterStatus: number;
-  Type: number;
+  WorkOffline: boolean;
   Default: boolean;
+  PortName: string;
 }
 
-function mapWindowsStatus(status: number): DetectedPrinter['status'] {
-  // Win32_Printer PrinterStatus values:
-  // 0 = Idle (ready), 1 = Paused, 2 = Error, 3 = Pending Deletion,
-  // 4 = Paper Jam, 5 = Paper Out, 6 = Manual Feed, 7 = Paper Problem
-  switch (status) {
-    case 0:
+function mapWindowsStatus(printer: Win32PrinterRaw): DetectedPrinter['status'] {
+  // WorkOffline is the most reliable indicator
+  if (printer.WorkOffline) return 'offline';
+
+  // PrinterStatus from Win32_Printer:
+  // 1 = Other, 2 = Unknown, 3 = Idle, 4 = Printing, 5 = Warmup
+  // 6 = Stopped/Error, 7 = Offline
+  switch (printer.PrinterStatus) {
+    case 3: // Idle
+    case 4: // Printing
+    case 5: // Warmup
       return 'ready';
-    case 1:
+    case 7: // Offline
       return 'offline';
-    case 2:
-    case 3:
-    case 4:
-    case 5:
-    case 6:
-    case 7:
+    case 6: // Stopped/Error
       return 'error';
     default:
       return 'unknown';
   }
 }
 
-function classifyWindowsPrinterType(name: string, portType: number): DetectedPrinter['type'] {
-  // Type flags: 0x0 = local, 0x10 = network connection
+function classifyWindowsPrinterType(name: string, portName: string): DetectedPrinter['type'] {
   const lowerName = name.toLowerCase();
+  const lowerPort = portName.toLowerCase();
 
   if (
     lowerName.includes('pdf') ||
@@ -113,7 +114,7 @@ function classifyWindowsPrinterType(name: string, portType: number): DetectedPri
     return 'virtual';
   }
 
-  if (portType & 0x10) {
+  if (lowerPort.startsWith('\\\\') || lowerPort.includes('ip_') || lowerPort.startsWith('tcp')) {
     return 'network';
   }
 
@@ -121,31 +122,62 @@ function classifyWindowsPrinterType(name: string, portType: number): DetectedPri
 }
 
 async function detectWindowsPrinters(): Promise<DetectedPrinter[]> {
+  // Two-step detection like OpenSea-Agent:
+  // 1. Get-CimInstance Win32_Printer for printer list + basic status
+  // 2. Get-PnpDevice -Class Printer for USB connectivity check
   const psCommand = [
-    'Get-Printer',
-    '| Select-Object Name, PrinterStatus, Type, @{N=\'Default\';E={$_.Name -eq (Get-CimInstance Win32_Printer | Where-Object Default -eq $true | Select-Object -ExpandProperty Name)}}',
-    '| ConvertTo-Json -Compress',
+    '$printers = Get-CimInstance Win32_Printer | Select-Object Name, PrinterStatus, WorkOffline, Default, PortName;',
+    '$pnp = @{};',
+    'try { Get-PnpDevice -Class Printer -ErrorAction SilentlyContinue | ForEach-Object { $pnp[$_.FriendlyName] = $_.Status } } catch {};',
+    '$printers | ForEach-Object { $_ | Add-Member -NotePropertyName PnpStatus -NotePropertyValue ($pnp[$_.Name]) -Force };',
+    '$printers | ConvertTo-Json -Compress',
   ].join(' ');
 
   try {
     const { stdout } = await execAsync(`powershell -NoProfile -Command "${psCommand}"`, {
-      timeout: 10_000,
+      timeout: 15_000,
     });
 
     if (!stdout.trim()) return [];
 
     const raw = JSON.parse(stdout.trim());
-    const items: WindowsPrinterRaw[] = Array.isArray(raw) ? raw : [raw];
+    const items: (Win32PrinterRaw & { PnpStatus?: string })[] = Array.isArray(raw) ? raw : [raw];
 
     return items.map((p) => ({
       name: p.Name,
-      type: classifyWindowsPrinterType(p.Name, p.Type ?? 0),
+      type: classifyWindowsPrinterType(p.Name, p.PortName ?? ''),
       isDefault: !!p.Default,
-      status: mapWindowsStatus(p.PrinterStatus ?? -1),
+      status: mapWindowsStatusWithPnp(p),
     }));
   } catch (err) {
-    log.warn('[Printer] PowerShell Get-Printer failed, trying wmic fallback:', err);
+    log.warn('[Printer] PowerShell detection failed, trying wmic fallback:', err);
     return detectWindowsPrintersWmic();
+  }
+}
+
+function mapWindowsStatusWithPnp(printer: Win32PrinterRaw & { PnpStatus?: string }): DetectedPrinter['status'] {
+  const isUsb = (printer.PortName ?? '').toUpperCase().startsWith('USB');
+
+  // For USB printers: check PnP device status (most reliable)
+  if (isUsb && printer.PnpStatus) {
+    if (printer.PnpStatus !== 'OK') return 'offline';
+  }
+
+  // WorkOffline flag
+  if (printer.WorkOffline) return 'offline';
+
+  // PrinterStatus from Win32_Printer
+  switch (printer.PrinterStatus) {
+    case 3: // Idle
+    case 4: // Printing
+    case 5: // Warmup
+      return 'ready';
+    case 7: // Offline
+      return 'offline';
+    case 6: // Stopped/Error
+      return 'error';
+    default:
+      return 'unknown';
   }
 }
 

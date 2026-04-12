@@ -2,6 +2,8 @@ import { ipcMain, BrowserWindow, app } from 'electron';
 import log from 'electron-log';
 import { store, StoreSchema } from './store';
 import { checkForUpdates, quitAndInstall } from './updater';
+import { connectWebSocket, disconnectWebSocket } from './main';
+import { isConnected } from './connection-state';
 import * as autoLaunch from './auto-launch';
 
 function registerIpcHandlers(): void {
@@ -35,7 +37,7 @@ function registerIpcHandlers(): void {
         agentId: agentId ?? undefined,
         computerName: agentName ?? '',
         ipAddress: '',
-        connected: false,
+        connected: isConnected(),
       };
     } catch (error) {
       log.error('[ipc] agent:get-status erro:', error);
@@ -48,10 +50,11 @@ function registerIpcHandlers(): void {
       const apiUrl = store.get('apiUrl');
       log.info(`[ipc] Pareando agente com código: ${code}`);
 
-      const response = await fetch(`${apiUrl}/v1/print/agents/pair`, {
+      const hostname = (await import('os')).hostname();
+      const response = await fetch(`${apiUrl}/v1/sales/print-agents/pair`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code }),
+        body: JSON.stringify({ pairingCode: code, hostname }),
       });
 
       if (!response.ok) {
@@ -61,6 +64,7 @@ function registerIpcHandlers(): void {
       }
 
       const data = (await response.json()) as {
+        deviceToken: string;
         agentId: string;
         agentName: string;
       };
@@ -68,8 +72,10 @@ function registerIpcHandlers(): void {
       store.set('agentId', data.agentId);
       store.set('agentName', data.agentName);
       store.set('pairingCode', code);
+      store.set('deviceToken', data.deviceToken);
 
       log.info(`[ipc] Agente pareado: ${data.agentName} (${data.agentId})`);
+      connectWebSocket();
       return { success: true, agentId: data.agentId, agentName: data.agentName };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Erro desconhecido';
@@ -85,7 +91,7 @@ function registerIpcHandlers(): void {
 
       if (agentId) {
         log.info(`[ipc] Despareando agente: ${agentId}`);
-        await fetch(`${apiUrl}/v1/print/agents/${agentId}/unpair`, {
+        await fetch(`${apiUrl}/v1/sales/print-agents/${agentId}/unpair`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
         }).catch((err) => {
@@ -96,7 +102,9 @@ function registerIpcHandlers(): void {
       store.set('agentId', null);
       store.set('agentName', null);
       store.set('pairingCode', null);
+      store.set('deviceToken', null);
 
+      disconnectWebSocket();
       log.info('[ipc] Agente despareado');
       return { success: true };
     } catch (error) {
@@ -109,17 +117,14 @@ function registerIpcHandlers(): void {
   // ── Printers ─────────────────────────────────────────────────────────
   ipcMain.handle('printers:list', async () => {
     try {
-      const windows = BrowserWindow.getAllWindows();
-      if (windows.length === 0) {
-        return [];
-      }
-      const printers = await windows[0].webContents.getPrintersAsync();
+      const { detectPrinters } = await import('./printer-detector');
+      const printers = await detectPrinters();
 
       return printers.map((p) => ({
         name: p.name,
-        displayName: p.displayName,
-        description: p.description,
-        status: p.status,
+        displayName: p.name,
+        description: p.type,
+        status: p.status === 'ready' ? 0 : p.status === 'offline' ? 1 : p.status === 'error' ? 2 : 3,
         isDefault: p.isDefault,
       }));
     } catch (error) {

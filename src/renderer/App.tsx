@@ -35,6 +35,11 @@ export function App() {
     }
   }, [manualUpdateCheck]));
 
+  // Listen for connection status changes from WebSocket
+  useIpcEvent<string>('connection:status', useCallback((connStatus: string) => {
+    setStatus((prev) => prev ? { ...prev, connected: connStatus === 'connected' } : prev);
+  }, []));
+
   const checkStatus = useCallback(async () => {
     try {
       const result = await invokeIpc<AgentStatus>('agent:get-status');

@@ -5,6 +5,8 @@ import { registerIpcHandlers } from './ipc-handlers';
 import { setupUpdater, checkForUpdates } from './updater';
 import { setup as setupAutoLaunch } from './auto-launch';
 import { store } from './store';
+import { PrintServerWSClient } from './ws-client';
+import { setConnected } from './connection-state';
 
 log.transports.file.level = 'info';
 log.transports.console.level = 'debug';
@@ -12,6 +14,73 @@ log.transports.console.level = 'debug';
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
+const wsClient = new PrintServerWSClient();
+
+function sendToRenderer(channel: string, data?: unknown): void {
+  const windows = BrowserWindow.getAllWindows();
+  for (const win of windows) {
+    if (!win.isDestroyed()) {
+      win.webContents.send(channel, data);
+    }
+  }
+}
+
+function connectWebSocket(): void {
+  const deviceToken = store.get('deviceToken');
+  const apiUrl = store.get('apiUrl');
+  if (!deviceToken) {
+    log.info('[main] Sem deviceToken, WebSocket não conectado');
+    return;
+  }
+
+  const wsUrl = apiUrl.replace(/^http/, 'ws');
+  log.info(`[main] Conectando WebSocket: ${wsUrl}`);
+  wsClient.connect(wsUrl, deviceToken);
+}
+
+function disconnectWebSocket(): void {
+  wsClient.disconnect();
+}
+
+// Track connection state and send to renderer
+wsClient.on('state', (state: string) => {
+  const isOnline = state === 'connected';
+  setConnected(isOnline);
+  sendToRenderer('connection:status', isOnline ? 'connected' : 'disconnected');
+  updateTrayMenu(isOnline);
+
+  // Send printer list to backend on connect
+  if (isOnline) {
+    sendPrintersToBackend();
+  }
+});
+
+// Handle incoming commands from backend
+wsClient.onMessage((message) => {
+  if (message.type === 'request-printers') {
+    sendPrintersToBackend();
+  }
+  // TODO: handle 'print' commands
+});
+
+async function sendPrintersToBackend(): Promise<void> {
+  try {
+    const { detectPrinters } = await import('./printer-detector');
+    const detected = await detectPrinters();
+
+    const printers = detected.map((p) => ({
+      name: p.name,
+      type: p.type,
+      isDefault: p.isDefault,
+      status: (p.status === 'ready' ? 'ONLINE' : p.status === 'offline' ? 'OFFLINE' : p.status === 'error' ? 'ERROR' : 'UNKNOWN') as 'ONLINE' | 'OFFLINE' | 'ERROR',
+    }));
+
+    wsClient.send({ type: 'printers', printers: printers as any });
+    log.info(`[main] Enviadas ${printers.length} impressoras ao backend`);
+  } catch (err) {
+    log.error('[main] Erro ao enviar impressoras:', err);
+  }
+}
 
 function getAssetPath(filename: string): string {
   return path.join(__dirname, '..', '..', 'assets', filename);
@@ -173,6 +242,9 @@ if (!gotTheLock) {
       log.error('[main] Erro ao configurar auto-launch:', err);
     });
 
+    // Connect WebSocket if already paired
+    connectWebSocket();
+
     await checkForUpdates().catch((err) => {
       log.error('[main] Erro ao verificar atualizações:', err);
     });
@@ -197,4 +269,4 @@ if (!gotTheLock) {
   });
 }
 
-export { updateTrayMenu };
+export { updateTrayMenu, connectWebSocket, disconnectWebSocket };

@@ -202,7 +202,7 @@ export function Dashboard({ status, onRefreshStatus, onOpenSettings, onUnpair }:
                       </div>
                     </div>
                     <StatusDot
-                      status={printer.status === 0 ? 'online' : 'warning'}
+                      status={printer.status === 0 ? 'online' : printer.status === 2 ? 'error' : printer.status === 1 ? 'offline' : 'warning'}
                       size="sm"
                     />
                   </div>
