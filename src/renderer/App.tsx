@@ -3,8 +3,9 @@ import { EmptyState } from './pages/EmptyState';
 import { PairingFlow } from './pages/PairingFlow';
 import { Dashboard } from './pages/Dashboard';
 import { Settings } from './pages/Settings';
-import { invokeIpc } from './hooks/useIpc';
-import type { AgentStatus } from './preload';
+import { UpdateModal } from './components/UpdateModal';
+import { invokeIpc, useIpcEvent } from './hooks/useIpc';
+import type { AgentStatus, UpdateStatus } from './preload';
 import { Waves } from 'lucide-react';
 
 type AppView = 'loading' | 'empty' | 'pairing' | 'dashboard' | 'settings';
@@ -12,6 +13,13 @@ type AppView = 'loading' | 'empty' | 'pairing' | 'dashboard' | 'settings';
 export function App() {
   const [view, setView] = useState<AppView>('loading');
   const [status, setStatus] = useState<AgentStatus | null>(null);
+  const [updateModal, setUpdateModal] = useState<UpdateStatus | null>(null);
+
+  // Listen to updater events globally
+  useIpcEvent<UpdateStatus>('updater:status', useCallback((data: UpdateStatus) => {
+    const mapped = data.status === 'up-to-date' ? 'not-available' : data.status;
+    setUpdateModal({ ...data, status: mapped as UpdateStatus['status'] });
+  }, []));
 
   const checkStatus = useCallback(async () => {
     try {
@@ -43,7 +51,16 @@ export function App() {
   }, []);
 
   return (
-    <div className="h-full flex flex-col bg-slate-900 overflow-hidden">
+    <div className="h-full flex flex-col bg-slate-900 overflow-hidden relative">
+      {updateModal && (
+        <UpdateModal
+          status={updateModal}
+          onClose={() => setUpdateModal(null)}
+          onInstall={async () => {
+            try { await invokeIpc('updater:install'); } catch {}
+          }}
+        />
+      )}
       <div className="flex-1 overflow-hidden">
         {view === 'loading' && <LoadingScreen />}
         {view === 'empty' && (
