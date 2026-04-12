@@ -107,7 +107,7 @@
     "publish": {
       "provider": "github",
       "owner": "OpenSea-ERP",
-      "repo": "print-server"
+      "repo": "OpenSea-PrintServer"
     }
   }
 }
