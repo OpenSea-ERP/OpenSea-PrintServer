@@ -14,12 +14,26 @@ export function App() {
   const [view, setView] = useState<AppView>('loading');
   const [status, setStatus] = useState<AgentStatus | null>(null);
   const [updateModal, setUpdateModal] = useState<UpdateStatus | null>(null);
+  const [manualUpdateCheck, setManualUpdateCheck] = useState(false);
+
+  // Listen for manual update check trigger from tray
+  useIpcEvent('updater:manual-check', useCallback(() => {
+    setManualUpdateCheck(true);
+  }, []));
 
   // Listen to updater events globally
   useIpcEvent<UpdateStatus>('updater:status', useCallback((data: UpdateStatus) => {
     const mapped = data.status === 'up-to-date' ? 'not-available' : data.status;
-    setUpdateModal({ ...data, status: mapped as UpdateStatus['status'] });
-  }, []));
+    // Auto-check: only show modal for actionable states (available/downloading/downloaded)
+    // Manual check (from tray): show all states including "tudo atualizado" and errors
+    const alwaysShow = ['available', 'downloading', 'downloaded'].includes(mapped);
+    if (alwaysShow || manualUpdateCheck) {
+      setUpdateModal({ ...data, status: mapped as UpdateStatus['status'] });
+      if (mapped !== 'checking' && mapped !== 'downloading') {
+        setManualUpdateCheck(false);
+      }
+    }
+  }, [manualUpdateCheck]));
 
   const checkStatus = useCallback(async () => {
     try {

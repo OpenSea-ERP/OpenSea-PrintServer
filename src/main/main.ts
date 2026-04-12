@@ -112,6 +112,18 @@ function updateTrayMenu(isOnline: boolean): void {
     {
       label: 'Verificar Atualizações',
       click: () => {
+        // Notify renderer this is a manual check (show all states)
+        const windows = BrowserWindow.getAllWindows();
+        for (const win of windows) {
+          if (!win.isDestroyed()) {
+            win.webContents.send('updater:manual-check');
+          }
+        }
+        // Show window so user sees the modal
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.focus();
+        }
         checkForUpdates().catch((err) => {
           log.error('[tray] Erro ao verificar atualizações:', err);
         });
