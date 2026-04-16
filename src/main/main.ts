@@ -7,6 +7,7 @@ import { setup as setupAutoLaunch } from './auto-launch';
 import { store } from './store';
 import { PrintServerWSClient } from './ws-client';
 import { setConnected } from './connection-state';
+import { getDeviceToken } from './secure-store';
 
 log.transports.file.level = 'info';
 log.transports.console.level = 'debug';
@@ -25,8 +26,8 @@ function sendToRenderer(channel: string, data?: unknown): void {
   }
 }
 
-function connectWebSocket(): void {
-  const deviceToken = store.get('deviceToken');
+async function connectWebSocket(): Promise<void> {
+  const deviceToken = await getDeviceToken();
   const apiUrl = store.get('apiUrl');
   if (!deviceToken) {
     log.info('[main] Sem deviceToken, WebSocket não conectado');
@@ -243,7 +244,9 @@ if (!gotTheLock) {
     });
 
     // Connect WebSocket if already paired
-    connectWebSocket();
+    await connectWebSocket().catch((err) => {
+      log.error('[main] Erro ao conectar WebSocket inicial:', err);
+    });
 
     await checkForUpdates().catch((err) => {
       log.error('[main] Erro ao verificar atualizações:', err);

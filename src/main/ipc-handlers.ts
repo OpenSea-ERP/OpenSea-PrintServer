@@ -5,6 +5,7 @@ import { checkForUpdates, quitAndInstall } from './updater';
 import { connectWebSocket, disconnectWebSocket } from './main';
 import { isConnected } from './connection-state';
 import * as autoLaunch from './auto-launch';
+import { setDeviceToken, deleteDeviceToken } from './secure-store';
 
 function registerIpcHandlers(): void {
   // ── Store ────────────────────────────────────────────────────────────
@@ -69,13 +70,13 @@ function registerIpcHandlers(): void {
         agentName: string;
       };
 
+      await setDeviceToken(data.deviceToken);
       store.set('agentId', data.agentId);
       store.set('agentName', data.agentName);
       store.set('pairingCode', code);
-      store.set('deviceToken', data.deviceToken);
 
       log.info(`[ipc] Agente pareado: ${data.agentName} (${data.agentId})`);
-      connectWebSocket();
+      await connectWebSocket();
       return { success: true, agentId: data.agentId, agentName: data.agentName };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Erro desconhecido';
@@ -99,12 +100,11 @@ function registerIpcHandlers(): void {
         });
       }
 
+      disconnectWebSocket();
+      await deleteDeviceToken();
       store.set('agentId', null);
       store.set('agentName', null);
       store.set('pairingCode', null);
-      store.set('deviceToken', null);
-
-      disconnectWebSocket();
       log.info('[ipc] Agente despareado');
       return { success: true };
     } catch (error) {
