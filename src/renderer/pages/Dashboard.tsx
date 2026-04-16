@@ -50,7 +50,6 @@ export function Dashboard({ status, onOpenSettings }: DashboardProps) {
     setJobCounts(counts);
   }, []);
 
-  // Fetch job counts when printers change and poll every 10s
   useEffect(() => {
     const list = printers ?? [];
     if (list.length === 0) return;
@@ -76,7 +75,7 @@ export function Dashboard({ status, onOpenSettings }: DashboardProps) {
   return (
     <div className="h-full flex flex-col">
       {/* ── Header ──────────────────────────────────────────────────────── */}
-      <div className="px-5 py-4 border-b border-slate-800">
+      <div className="px-5 pt-4 pb-3 border-b border-slate-800">
         <div className="flex items-center justify-between">
           {/* Left: icon + title + machine name */}
           <div className="flex items-center gap-2.5">
@@ -93,7 +92,7 @@ export function Dashboard({ status, onOpenSettings }: DashboardProps) {
             </div>
           </div>
 
-          {/* Right: settings + connection status cards */}
+          {/* Right: settings (icon only) + connection status (icon only) */}
           <div className="flex items-center gap-2">
             <button
               onClick={onOpenSettings}
@@ -109,24 +108,24 @@ export function Dashboard({ status, onOpenSettings }: DashboardProps) {
             </button>
             <div
               className={cn(
-                'h-9 px-2.5 flex items-center gap-1.5 rounded-lg border text-xs font-medium',
+                'h-9 w-9 flex items-center justify-center rounded-lg border',
                 status.connected
                   ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
                   : 'bg-slate-800/60 border-slate-700/50 text-slate-500',
               )}
+              title={status.connected ? 'Conectado' : 'Desconectado'}
             >
               {status.connected ? (
-                <Wifi className="h-3.5 w-3.5" />
+                <Wifi className="h-4 w-4" />
               ) : (
-                <WifiOff className="h-3.5 w-3.5" />
+                <WifiOff className="h-4 w-4" />
               )}
-              {status.connected ? 'Conectado' : 'Desconectado'}
             </div>
           </div>
         </div>
 
-        {/* Sub-header: detected printers count + verify button */}
-        <div className="flex items-center justify-between mt-3">
+        {/* Sub-header: detected printers count + verify button — aligned bottom */}
+        <div className="flex items-end justify-between mt-3 pb-0">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold text-slate-200">
               Impressoras Detectadas
@@ -141,16 +140,16 @@ export function Dashboard({ status, onOpenSettings }: DashboardProps) {
             onClick={handleRefreshPrinters}
             disabled={refreshing}
             className="
-              h-8 px-3 flex items-center gap-1.5
-              text-xs font-medium text-slate-400
+              h-8 w-8 flex items-center justify-center
+              text-slate-400
               bg-slate-800/60 border border-slate-700/50 rounded-lg
               hover:bg-slate-800 hover:border-slate-600 hover:text-slate-300
               disabled:opacity-50 disabled:pointer-events-none
               transition-colors
             "
+            title="Atualizar lista"
           >
-            <RefreshCw className={cn('h-3 w-3', refreshing && 'animate-spin')} />
-            Verificar
+            <RefreshCw className={cn('h-3.5 w-3.5', refreshing && 'animate-spin')} />
           </button>
         </div>
       </div>
