@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow, app } from 'electron';
+import { ipcMain, BrowserWindow, app, net } from 'electron';
 import log from 'electron-log';
 import { store, StoreSchema } from './store';
 import { checkForUpdates, quitAndInstall } from './updater';
@@ -6,6 +6,80 @@ import { connectWebSocket, disconnectWebSocket } from './main';
 import { isConnected } from './connection-state';
 import * as autoLaunch from './auto-launch';
 import { setDeviceToken, deleteDeviceToken } from './secure-store';
+import { detectorToCode } from './printer-status';
+
+// ── Rate limiter simples (janela de tempo mínimo entre chamadas) ──────────────
+const lastCalled = new Map<string, number>();
+
+function rateLimit(channel: string, minIntervalMs: number): boolean {
+  const now = Date.now();
+  const last = lastCalled.get(channel) ?? 0;
+  if (now - last < minIntervalMs) {
+    log.warn(`[ipc] Rate limit hit em ${channel} (última há ${now - last}ms, mínimo ${minIntervalMs}ms)`);
+    return false;
+  }
+  lastCalled.set(channel, now);
+  return true;
+}
+
+// ── Validação de URL da API ───────────────────────────────────────────────────
+function isValidApiUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (!['http:', 'https:'].includes(parsed.protocol)) return false;
+    if (app.isPackaged && parsed.protocol !== 'https:') {
+      // Em produção, só aceita HTTPS
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// ── Sanitização de strings para log ───────────────────────────────────────────
+function safeLog(value: string | null | undefined, maxLen = 64): string {
+  if (!value) return '(vazio)';
+  return value.replace(/[\r\n\t\x00-\x1f]/g, '_').slice(0, maxLen);
+}
+
+// ── Fetch com timeout, CORS explícito e proxy opcional ────────────────────────
+interface FetchOptions {
+  method: string;
+  body?: unknown;
+  timeoutMs?: number;
+}
+
+async function apiRequest(apiUrl: string, pathname: string, opts: FetchOptions): Promise<Response> {
+  if (!isValidApiUrl(apiUrl)) {
+    throw new Error(`URL da API inválida: ${safeLog(apiUrl)}`);
+  }
+
+  const url = `${apiUrl.replace(/\/+$/, '')}${pathname}`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), opts.timeoutMs ?? 15_000);
+
+  try {
+    // Electron `net` honra config de proxy corporativo do sistema automaticamente.
+    // `net.fetch` está disponível no main process (Electron 28+).
+    const fetchFn = typeof net !== 'undefined' && typeof net.fetch === 'function'
+      ? net.fetch.bind(net)
+      : fetch;
+
+    const response = await fetchFn(url, {
+      method: opts.method,
+      mode: 'cors',
+      credentials: 'omit',
+      cache: 'no-store',
+      headers: { 'Content-Type': 'application/json' },
+      body: opts.body ? JSON.stringify(opts.body) : undefined,
+      signal: controller.signal,
+    });
+    return response;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 function registerIpcHandlers(): void {
   // ── Store ────────────────────────────────────────────────────────────
@@ -13,7 +87,7 @@ function registerIpcHandlers(): void {
     try {
       return store.get(key);
     } catch (error) {
-      log.error(`[ipc] store:get(${key}) erro:`, error);
+      log.error(`[ipc] store:get(${safeLog(String(key))}) erro:`, error);
       return null;
     }
   });
@@ -23,7 +97,7 @@ function registerIpcHandlers(): void {
       store.set(key, value as never);
       return true;
     } catch (error) {
-      log.error(`[ipc] store:set(${key}) erro:`, error);
+      log.error(`[ipc] store:set(${safeLog(String(key))}) erro:`, error);
       return false;
     }
   });
@@ -47,20 +121,31 @@ function registerIpcHandlers(): void {
   });
 
   ipcMain.handle('agent:pair', async (_event, code: string) => {
+    if (!rateLimit('agent:pair', 10_000)) {
+      return { success: false, error: 'Aguarde alguns segundos antes de tentar novamente' };
+    }
     try {
-      const apiUrl = store.get('apiUrl');
-      log.info(`[ipc] Pareando agente com código: ${code}`);
+      if (typeof code !== 'string' || code.length < 4 || code.length > 32) {
+        return { success: false, error: 'Código de pareamento inválido' };
+      }
 
+      const apiUrl = store.get('apiUrl');
       const hostname = (await import('os')).hostname();
-      const response = await fetch(`${apiUrl}/v1/sales/print-agents/pair`, {
+      const codePrefix = code.slice(0, 2);
+
+      log.info(
+        `[ipc] Pair attempt — code=${codePrefix}** host=${safeLog(hostname)} at=${new Date().toISOString()}`,
+      );
+
+      const response = await apiRequest(apiUrl, '/v1/sales/print-agents/pair', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pairingCode: code, hostname }),
+        body: { pairingCode: code, hostname },
+        timeoutMs: 15_000,
       });
 
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
-        const message = (body as { message?: string }).message ?? 'Falha ao parear';
+        const message = (body as { message?: string }).message ?? `HTTP ${response.status}`;
         throw new Error(message);
       }
 
@@ -75,12 +160,12 @@ function registerIpcHandlers(): void {
       store.set('agentName', data.agentName);
       store.set('pairingCode', code);
 
-      log.info(`[ipc] Agente pareado: ${data.agentName} (${data.agentId})`);
+      log.info(`[ipc] Agente pareado: ${safeLog(data.agentName)} (${safeLog(data.agentId, 32)})`);
       await connectWebSocket();
       return { success: true, agentId: data.agentId, agentName: data.agentName };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Erro desconhecido';
-      log.error('[ipc] agent:pair erro:', message);
+      log.error('[ipc] agent:pair erro:', safeLog(message, 200));
       return { success: false, error: message };
     }
   });
@@ -90,17 +175,22 @@ function registerIpcHandlers(): void {
       const apiUrl = store.get('apiUrl');
       const agentId = store.get('agentId');
 
+      // 1) Desconectar WS primeiro para evitar race com backend revogando token
+      disconnectWebSocket();
+
       if (agentId) {
-        log.info(`[ipc] Despareando agente: ${agentId}`);
-        await fetch(`${apiUrl}/v1/sales/print-agents/${agentId}/unpair`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-        }).catch((err) => {
+        log.info(`[ipc] Despareando agente: ${safeLog(agentId, 32)}`);
+        try {
+          await apiRequest(apiUrl, `/v1/sales/print-agents/${encodeURIComponent(agentId)}/unpair`, {
+            method: 'POST',
+            timeoutMs: 10_000,
+          });
+        } catch (err) {
           log.warn('[ipc] Falha ao notificar API sobre despareamento:', err);
-        });
+        }
       }
 
-      disconnectWebSocket();
+      // 2) Limpar credenciais só depois
       await deleteDeviceToken();
       store.set('agentId', null);
       store.set('agentName', null);
@@ -109,13 +199,16 @@ function registerIpcHandlers(): void {
       return { success: true };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Erro desconhecido';
-      log.error('[ipc] agent:unpair erro:', message);
+      log.error('[ipc] agent:unpair erro:', safeLog(message, 200));
       return { success: false, error: message };
     }
   });
 
   // ── Printers ─────────────────────────────────────────────────────────
   ipcMain.handle('printers:list', async () => {
+    if (!rateLimit('printers:list', 2_000)) {
+      return [];
+    }
     try {
       const { detectPrinters } = await import('./printer-detector');
       const printers = await detectPrinters();
@@ -124,7 +217,7 @@ function registerIpcHandlers(): void {
         name: p.name,
         displayName: p.name,
         description: p.type,
-        status: p.status === 'ready' ? 0 : p.status === 'offline' ? 1 : p.status === 'error' ? 2 : 3,
+        status: detectorToCode(p.status),
         isDefault: p.isDefault,
       }));
     } catch (error) {
@@ -135,6 +228,9 @@ function registerIpcHandlers(): void {
 
   // ── Updater ──────────────────────────────────────────────────────────
   ipcMain.handle('updater:check', async () => {
+    if (!rateLimit('updater:check', 30_000)) {
+      return { success: false, error: 'Aguarde 30 segundos entre verificações' };
+    }
     try {
       await checkForUpdates();
       return { success: true };
@@ -184,5 +280,8 @@ function registerIpcHandlers(): void {
 
   log.info('[ipc] Todos os handlers IPC registrados');
 }
+
+// BrowserWindow import mantido para compat futura
+void BrowserWindow;
 
 export { registerIpcHandlers };
