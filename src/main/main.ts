@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Tray, Menu, nativeImage } from 'electron';
+import { app, BrowserWindow, Tray, Menu, nativeImage, Notification, dialog } from 'electron';
 import path from 'path';
 import log from 'electron-log';
 import { registerIpcHandlers } from './ipc-handlers';
@@ -8,9 +8,12 @@ import { store } from './store';
 import { PrintServerWSClient } from './ws-client';
 import { setConnected } from './connection-state';
 import { getDeviceToken } from './secure-store';
+import { executePrint } from './print-handler';
+import { detectorToBackend } from './printer-status';
 
 log.transports.file.level = 'info';
 log.transports.console.level = 'debug';
+log.transports.file.maxSize = 10 * 1024 * 1024; // 10MB rotation
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -60,23 +63,63 @@ wsClient.on('state', (state: string) => {
 wsClient.onMessage((message) => {
   if (message.type === 'request-printers') {
     sendPrintersToBackend();
+    return;
   }
-  // TODO: handle 'print' commands
+
+  if (message.type === 'print') {
+    void handlePrintCommand(message.jobId, message.printerId, message.data, message.copies);
+  }
 });
+
+async function handlePrintCommand(
+  jobId: string,
+  printerName: string,
+  dataBase64: string,
+  copies: number,
+): Promise<void> {
+  let buffer: Buffer;
+  try {
+    buffer = Buffer.from(dataBase64, 'base64');
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    log.error(`[main] Job ${jobId}: base64 inválido — ${msg}`);
+    wsClient.send({ type: 'print-result', jobId, success: false, error: 'base64 inválido' });
+    return;
+  }
+
+  const result = await executePrint(jobId, printerName, buffer, copies);
+  wsClient.send({ type: 'print-result', jobId, success: result.success, error: result.error });
+
+  notifyPrintResult(jobId, printerName, result.success, result.error);
+}
+
+function notifyPrintResult(jobId: string, printerName: string, success: boolean, error?: string): void {
+  try {
+    if (!Notification.isSupported()) return;
+    const title = success ? 'Impressão concluída' : 'Falha na impressão';
+    const body = success
+      ? `Job ${jobId.slice(0, 8)} enviado para ${printerName}`
+      : `Job ${jobId.slice(0, 8)}: ${error ?? 'erro desconhecido'}`;
+    new Notification({ title, body, silent: true }).show();
+  } catch (err) {
+    log.debug('[main] Notification falhou:', err);
+  }
+}
 
 async function sendPrintersToBackend(): Promise<void> {
   try {
-    const { detectPrinters } = await import('./printer-detector');
+    const { detectPrinters, clearPrinterCache } = await import('./printer-detector');
+    clearPrinterCache();
     const detected = await detectPrinters();
 
     const printers = detected.map((p) => ({
       name: p.name,
       type: p.type,
       isDefault: p.isDefault,
-      status: (p.status === 'ready' ? 'ONLINE' : p.status === 'offline' ? 'OFFLINE' : p.status === 'error' ? 'ERROR' : 'UNKNOWN') as 'ONLINE' | 'OFFLINE' | 'ERROR',
+      status: detectorToBackend(p.status),
     }));
 
-    wsClient.send({ type: 'printers', printers: printers as any });
+    wsClient.send({ type: 'printers', printers });
     log.info(`[main] Enviadas ${printers.length} impressoras ao backend`);
   } catch (err) {
     log.error('[main] Erro ao enviar impressoras:', err);
@@ -218,6 +261,14 @@ const gotTheLock = app.requestSingleInstanceLock();
 
 if (!gotTheLock) {
   log.info('[main] Outra instância já está rodando, encerrando');
+  try {
+    dialog.showErrorBox(
+      'OpenSea Print Server',
+      'Já existe uma instância em execução. Abra o ícone na bandeja do sistema.',
+    );
+  } catch {
+    // dialog pode não estar pronto
+  }
   app.quit();
 } else {
   app.on('second-instance', () => {
@@ -253,8 +304,21 @@ if (!gotTheLock) {
     });
   });
 
-  app.on('before-quit', () => {
+  app.on('before-quit', (event) => {
+    if (isQuitting) return;
     isQuitting = true;
+    event.preventDefault();
+    log.info('[main] before-quit: desconectando WebSocket...');
+    try {
+      wsClient.send({ type: 'status', status: 'OFFLINE' });
+    } catch {
+      // noop
+    }
+    disconnectWebSocket();
+    setTimeout(() => {
+      log.info('[main] Encerrando app após cleanup');
+      app.exit(0);
+    }, 500);
   });
 
   app.on('window-all-closed', () => {

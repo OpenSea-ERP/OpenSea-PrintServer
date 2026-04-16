@@ -24,7 +24,7 @@ export interface PrinterInfo {
   name: string;
   type: 'local' | 'network' | 'virtual';
   isDefault: boolean;
-  status: 'ready' | 'offline' | 'error' | 'unknown';
+  status: 'ONLINE' | 'OFFLINE' | 'ERROR' | 'UNKNOWN';
 }
 
 export interface PrintResultMessage {
