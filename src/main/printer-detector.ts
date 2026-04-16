@@ -79,27 +79,6 @@ interface Win32PrinterRaw {
   PortName: string;
 }
 
-function mapWindowsStatus(printer: Win32PrinterRaw): DetectedPrinter['status'] {
-  // WorkOffline is the most reliable indicator
-  if (printer.WorkOffline) return 'offline';
-
-  // PrinterStatus from Win32_Printer:
-  // 1 = Other, 2 = Unknown, 3 = Idle, 4 = Printing, 5 = Warmup
-  // 6 = Stopped/Error, 7 = Offline
-  switch (printer.PrinterStatus) {
-    case 3: // Idle
-    case 4: // Printing
-    case 5: // Warmup
-      return 'ready';
-    case 7: // Offline
-      return 'offline';
-    case 6: // Stopped/Error
-      return 'error';
-    default:
-      return 'unknown';
-  }
-}
-
 function classifyWindowsPrinterType(name: string, portName: string): DetectedPrinter['type'] {
   const lowerName = name.toLowerCase();
   const lowerPort = portName.toLowerCase();
@@ -140,10 +119,34 @@ async function detectWindowsPrinters(): Promise<DetectedPrinter[]> {
 
     if (!stdout.trim()) return [];
 
-    const raw = JSON.parse(stdout.trim());
-    const items: (Win32PrinterRaw & { PnpStatus?: string })[] = Array.isArray(raw) ? raw : [raw];
+    let raw: unknown;
+    try {
+      raw = JSON.parse(stdout.trim());
+    } catch (parseErr) {
+      log.warn('[Printer] PowerShell JSON inválido, usando wmic:', parseErr);
+      return detectWindowsPrintersWmic();
+    }
 
-    return items.map((p) => ({
+    const items = Array.isArray(raw) ? raw : [raw];
+    const valid = items.filter((item): item is Win32PrinterRaw & { PnpStatus?: string } => {
+      return (
+        !!item &&
+        typeof item === 'object' &&
+        typeof (item as { Name?: unknown }).Name === 'string' &&
+        (item as { Name: string }).Name.length > 0
+      );
+    });
+
+    if (valid.length !== items.length) {
+      log.warn(`[Printer] ${items.length - valid.length} itens com schema inválido descartados`);
+    }
+
+    if (valid.length === 0) {
+      log.warn('[Printer] Nenhum item válido no JSON do PowerShell, usando wmic');
+      return detectWindowsPrintersWmic();
+    }
+
+    return valid.map((p) => ({
       name: p.Name,
       type: classifyWindowsPrinterType(p.Name, p.PortName ?? ''),
       isDefault: !!p.Default,
