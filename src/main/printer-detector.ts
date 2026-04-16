@@ -1,5 +1,6 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import net from 'net';
 import log from 'electron-log';
 
 const execAsync = promisify(exec);
@@ -22,10 +23,6 @@ let cacheTimestamp: number = 0;
 
 // ── Public API ───────────────────────────────────────────────────────────────
 
-/**
- * Detect printers installed on the operating system.
- * Results are cached for 10 seconds to avoid excessive re-scanning.
- */
 export async function detectPrinters(): Promise<DetectedPrinter[]> {
   const now = Date.now();
 
@@ -41,8 +38,6 @@ export async function detectPrinters(): Promise<DetectedPrinter[]> {
         printers = await detectWindowsPrinters();
         break;
       case 'darwin':
-        printers = await detectUnixPrinters();
-        break;
       case 'linux':
         printers = await detectUnixPrinters();
         break;
@@ -61,12 +56,92 @@ export async function detectPrinters(): Promise<DetectedPrinter[]> {
   }
 }
 
-/**
- * Force-clear the printer cache so the next call re-scans.
- */
 export function clearPrinterCache(): void {
   cachedPrinters = null;
   cacheTimestamp = 0;
+}
+
+// ── TCP port probe ──────────────────────────────────────────────────────────
+
+const PROBE_TIMEOUT_MS = 1500;
+const RAW_PORT = 9100;  // Porta padrão de impressão raw (JetDirect)
+const IPP_PORT = 631;   // IPP
+
+/**
+ * Tenta abrir uma conexão TCP ao IP da impressora.
+ * Retorna true se conseguir conectar em até PROBE_TIMEOUT_MS.
+ */
+function probePort(host: string, port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    let settled = false;
+
+    const finish = (result: boolean) => {
+      if (settled) return;
+      settled = true;
+      socket.destroy();
+      resolve(result);
+    };
+
+    socket.setTimeout(PROBE_TIMEOUT_MS);
+    socket.once('connect', () => finish(true));
+    socket.once('timeout', () => finish(false));
+    socket.once('error', () => finish(false));
+
+    try {
+      socket.connect(port, host);
+    } catch {
+      finish(false);
+    }
+  });
+}
+
+/**
+ * Extrai IP de um PortName Windows. Suporta formatos comuns:
+ * - "IP_192.168.1.100"
+ * - "TCP_192.168.1.100"
+ * - "192.168.1.100"
+ * - "TCPMON:192.168.1.100"
+ * - Portas com sufixo: "IP_192.168.1.100_1"
+ */
+function extractIpFromPort(portName: string): string | null {
+  if (!portName) return null;
+  // Remover prefixos comuns
+  const cleaned = portName
+    .replace(/^(IP_|TCP_|TCPMON:|WSD-)/i, '')
+    .split('_')[0]  // pegar só o IP antes de sufixos como _1
+    .trim();
+
+  // IPv4 basic check
+  const match = cleaned.match(/^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/);
+  return match ? match[1] : null;
+}
+
+/**
+ * Verifica conectividade real para impressoras de rede (TCP probe).
+ * Para cada impressora com port TCP/IP, tenta conectar na porta 9100 (raw) ou 631 (IPP).
+ * Se ambas falham → marca como offline.
+ */
+async function probeNetworkPrinters(
+  printers: Array<{ printer: DetectedPrinter; portName: string }>,
+): Promise<void> {
+  const probePromises = printers.map(async ({ printer, portName }) => {
+    const ip = extractIpFromPort(portName);
+    if (!ip) return; // Sem IP extraível, mantém status do WMI
+
+    // Testar porta raw (9100) primeiro, depois IPP (631)
+    const rawOk = await probePort(ip, RAW_PORT);
+    if (rawOk) return; // Online
+
+    const ippOk = await probePort(ip, IPP_PORT);
+    if (ippOk) return; // Online via IPP
+
+    // Nenhuma porta respondeu — impressora offline
+    log.debug(`[Printer] "${printer.name}" (${ip}) não respondeu TCP ${RAW_PORT}/${IPP_PORT} — marcando offline`);
+    printer.status = 'offline';
+  });
+
+  await Promise.all(probePromises);
 }
 
 // ── Windows ──────────────────────────────────────────────────────────────────
@@ -101,9 +176,6 @@ function classifyWindowsPrinterType(name: string, portName: string): DetectedPri
 }
 
 async function detectWindowsPrinters(): Promise<DetectedPrinter[]> {
-  // Two-step detection like OpenSea-Agent:
-  // 1. Get-CimInstance Win32_Printer for printer list + basic status
-  // 2. Get-PnpDevice -Class Printer for USB connectivity check
   const psCommand = [
     '$printers = Get-CimInstance Win32_Printer | Select-Object Name, PrinterStatus, WorkOffline, Default, PortName;',
     '$pnp = @{};',
@@ -146,12 +218,28 @@ async function detectWindowsPrinters(): Promise<DetectedPrinter[]> {
       return detectWindowsPrintersWmic();
     }
 
-    return valid.map((p) => ({
-      name: p.Name,
-      type: classifyWindowsPrinterType(p.Name, p.PortName ?? ''),
-      isDefault: !!p.Default,
-      status: mapWindowsStatusWithPnp(p),
+    // Fase 1: mapear status via WMI + PnP (USB)
+    const results = valid.map((p) => ({
+      printer: {
+        name: p.Name,
+        type: classifyWindowsPrinterType(p.Name, p.PortName ?? ''),
+        isDefault: !!p.Default,
+        status: mapWindowsStatusWithPnp(p),
+      } as DetectedPrinter,
+      portName: p.PortName ?? '',
     }));
+
+    // Fase 2: TCP probe real para impressoras de rede que WMI reportou como 'ready'
+    const networkReady = results.filter(
+      (r) => r.printer.type === 'network' && r.printer.status === 'ready',
+    );
+
+    if (networkReady.length > 0) {
+      log.debug(`[Printer] Probing ${networkReady.length} impressora(s) de rede...`);
+      await probeNetworkPrinters(networkReady);
+    }
+
+    return results.map((r) => r.printer);
   } catch (err) {
     log.warn('[Printer] PowerShell detection failed, trying wmic fallback:', err);
     return detectWindowsPrintersWmic();
@@ -161,15 +249,16 @@ async function detectWindowsPrinters(): Promise<DetectedPrinter[]> {
 function mapWindowsStatusWithPnp(printer: Win32PrinterRaw & { PnpStatus?: string }): DetectedPrinter['status'] {
   const isUsb = (printer.PortName ?? '').toUpperCase().startsWith('USB');
 
-  // For USB printers: check PnP device status (most reliable)
+  // USB: PnP device status é o mais confiável
   if (isUsb && printer.PnpStatus) {
     if (printer.PnpStatus !== 'OK') return 'offline';
   }
 
-  // WorkOffline flag
+  // WorkOffline flag (definido pelo usuário ou por SNMP em algumas impressoras)
   if (printer.WorkOffline) return 'offline';
 
-  // PrinterStatus from Win32_Printer
+  // PrinterStatus do Win32_Printer (NÃO confiável sozinho para rede —
+  // o TCP probe em probeNetworkPrinters corrige downstream)
   switch (printer.PrinterStatus) {
     case 3: // Idle
     case 4: // Printing
@@ -199,7 +288,6 @@ async function detectWindowsPrintersWmic(): Promise<DetectedPrinter[]> {
 
     if (lines.length < 2) return [];
 
-    // CSV header: Node,Default,Name,PortName,Status
     const header = lines[0].toLowerCase().split(',');
     const nameIdx = header.indexOf('name');
     const defaultIdx = header.indexOf('default');
@@ -217,20 +305,9 @@ async function detectWindowsPrintersWmic(): Promise<DetectedPrinter[]> {
       const name = cols[nameIdx].trim();
       const isDefault = cols[defaultIdx]?.trim().toUpperCase() === 'TRUE';
       const statusStr = cols[statusIdx]?.trim().toLowerCase() ?? '';
-      const portName = cols[portIdx]?.trim().toLowerCase() ?? '';
+      const portName = cols[portIdx]?.trim() ?? '';
 
-      let type: DetectedPrinter['type'] = 'local';
-      const lowerName = name.toLowerCase();
-      if (
-        lowerName.includes('pdf') ||
-        lowerName.includes('xps') ||
-        lowerName.includes('onenote') ||
-        lowerName.includes('fax')
-      ) {
-        type = 'virtual';
-      } else if (portName.startsWith('\\\\') || portName.includes('ip_')) {
-        type = 'network';
-      }
+      const type = classifyWindowsPrinterType(name, portName);
 
       let status: DetectedPrinter['status'] = 'unknown';
       if (statusStr === 'ok' || statusStr === 'idle' || statusStr === 'ready') {
@@ -242,6 +319,20 @@ async function detectWindowsPrintersWmic(): Promise<DetectedPrinter[]> {
       }
 
       printers.push({ name, type, isDefault, status });
+    }
+
+    // TCP probe para network printers no wmic path também
+    const networkReady = printers
+      .filter((p) => p.type === 'network' && p.status === 'ready')
+      .map((printer) => {
+        const row = lines.find((l) => l.includes(printer.name));
+        const cols = row?.split(',');
+        const portName = cols?.[portIdx]?.trim() ?? '';
+        return { printer, portName };
+      });
+
+    if (networkReady.length > 0) {
+      await probeNetworkPrinters(networkReady);
     }
 
     return printers;
@@ -263,7 +354,6 @@ async function detectUnixPrinters(): Promise<DetectedPrinter[]> {
     const printers: DetectedPrinter[] = [];
     let defaultPrinter: string | null = null;
 
-    // Parse default printer line: "system default destination: PrinterName"
     for (const line of lines) {
       const defaultMatch = line.match(/system default destination:\s*(.+)/i);
       if (defaultMatch) {
@@ -271,8 +361,6 @@ async function detectUnixPrinters(): Promise<DetectedPrinter[]> {
       }
     }
 
-    // Parse printer lines: "printer PrinterName is idle. enabled since ..."
-    // or: "printer PrinterName disabled since ..."
     for (const line of lines) {
       const printerMatch = line.match(/^printer\s+(\S+)\s+(is\s+)?(.+)/i);
       if (!printerMatch) continue;
@@ -307,14 +395,13 @@ async function detectUnixPrinters(): Promise<DetectedPrinter[]> {
       });
     }
 
-    // Try to get more type info from lpstat -v (connection URIs)
+    // Enriquecer tipo com lpstat -v (URIs)
     try {
       const { stdout: vOut } = await execAsync('lpstat -v 2>/dev/null', {
         timeout: 5_000,
       });
 
       for (const line of vOut.trim().split('\n')) {
-        // "device for PrinterName: ipp://..."
         const match = line.match(/^device for\s+(\S+?):\s*(.+)/i);
         if (!match) continue;
 
@@ -336,7 +423,35 @@ async function detectUnixPrinters(): Promise<DetectedPrinter[]> {
         }
       }
     } catch {
-      // lpstat -v not critical
+      // lpstat -v não é crítico
+    }
+
+    // TCP probe para impressoras de rede no Unix
+    const networkReady = printers.filter(
+      (p) => p.type === 'network' && p.status === 'ready',
+    );
+    if (networkReady.length > 0) {
+      // No Unix, extrair IP da URI (ipp://192.168.1.100:631)
+      const probeTargets: Array<{ printer: DetectedPrinter; portName: string }> = [];
+      try {
+        const { stdout: vOut } = await execAsync('lpstat -v 2>/dev/null', {
+          timeout: 5_000,
+        });
+        for (const nr of networkReady) {
+          const line = vOut.split('\n').find((l) => l.includes(nr.name));
+          if (line) {
+            const uriMatch = line.match(/:\/\/([^:/]+)/);
+            if (uriMatch) {
+              probeTargets.push({ printer: nr, portName: uriMatch[1] });
+            }
+          }
+        }
+      } catch {
+        // Sem probe no Unix se lpstat falhar
+      }
+      if (probeTargets.length > 0) {
+        await probeNetworkPrinters(probeTargets);
+      }
     }
 
     return printers;
