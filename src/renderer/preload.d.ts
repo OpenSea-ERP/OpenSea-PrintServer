@@ -7,6 +7,17 @@ export interface PrinterInfo {
   options?: Record<string, string>;
 }
 
+export interface PrintJob {
+  id: number;
+  documentName: string;
+  userName: string;
+  submittedAt: string;
+  status: 'printing' | 'queued' | 'paused' | 'error' | 'deleting';
+  totalPages: number;
+  pagesPrinted: number;
+  sizeBytes: number;
+}
+
 export interface AgentStatus {
   paired: boolean;
   agentId?: string;

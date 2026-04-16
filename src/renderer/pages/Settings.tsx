@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { ArrowLeft, Download, Info, RefreshCw, Waves } from 'lucide-react';
+import { ArrowLeft, Download, Printer, RefreshCw, Unlink } from 'lucide-react';
 import { Toggle } from '../components/Toggle';
 import { cn } from '../utils';
 import { invokeIpc, useIpcEvent } from '../hooks/useIpc';
@@ -7,15 +7,17 @@ import type { UpdateStatus } from '../preload';
 
 interface SettingsProps {
   onBack: () => void;
+  onUnpair: () => void;
 }
 
-export function Settings({ onBack }: SettingsProps) {
+export function Settings({ onBack, onUnpair }: SettingsProps) {
   const [autoLaunch, setAutoLaunch] = useState(false);
   const [minimizeToTray, setMinimizeToTray] = useState(true);
   const [loadingSettings, setLoadingSettings] = useState(true);
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus>({ status: 'not-available' });
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [version, setVersion] = useState('1.0.0');
+  const [unpairConfirm, setUnpairConfirm] = useState(false);
 
   useEffect(() => {
     invokeIpc<string>('app:get-version').then((v) => setVersion(v)).catch(() => {});
@@ -54,11 +56,10 @@ export function Settings({ onBack }: SettingsProps) {
     }
   }, []);
 
-  // Listen to updater events from main process
   useIpcEvent<UpdateStatus>('updater:status', useCallback((data: UpdateStatus) => {
-    const status = data.status === 'up-to-date' ? 'not-available' : data.status;
-    setUpdateStatus({ ...data, status: status as UpdateStatus['status'] });
-    if (status !== 'checking' && status !== 'downloading') {
+    const mapped = data.status === 'up-to-date' ? 'not-available' : data.status;
+    setUpdateStatus({ ...data, status: mapped as UpdateStatus['status'] });
+    if (mapped !== 'checking' && mapped !== 'downloading') {
       setCheckingUpdate(false);
     }
   }, []));
@@ -81,6 +82,20 @@ export function Settings({ onBack }: SettingsProps) {
       // ignore
     }
   }, []);
+
+  const handleUnpair = useCallback(async () => {
+    if (!unpairConfirm) {
+      setUnpairConfirm(true);
+      setTimeout(() => setUnpairConfirm(false), 3000);
+      return;
+    }
+    try {
+      await invokeIpc('agent:unpair');
+      onUnpair();
+    } catch {
+      // ignore
+    }
+  }, [unpairConfirm, onUnpair]);
 
   return (
     <div className="h-full flex flex-col">
@@ -166,6 +181,31 @@ export function Settings({ onBack }: SettingsProps) {
           </div>
         </div>
 
+        {/* Unpair Section */}
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-1">
+            Vinculação
+          </h3>
+          <div className="bg-slate-800/60 rounded-xl border border-slate-700/50 p-4">
+            <p className="text-xs text-slate-500 mb-3">
+              Desvincular este computador do servidor OpenSea. Será necessário parear novamente para enviar impressões.
+            </p>
+            <button
+              onClick={handleUnpair}
+              className={cn(
+                'w-full h-9 flex items-center justify-center gap-1.5',
+                'text-xs font-medium rounded-lg border transition-all duration-200',
+                unpairConfirm
+                  ? 'bg-rose-500/10 border-rose-500/20 text-rose-400 hover:bg-rose-500/20'
+                  : 'bg-slate-700/50 border-slate-600/50 text-slate-300 hover:bg-slate-700 hover:border-slate-600',
+              )}
+            >
+              <Unlink className="h-3.5 w-3.5" />
+              {unpairConfirm ? 'Confirmar Desvinculação?' : 'Desvincular'}
+            </button>
+          </div>
+        </div>
+
         {/* About */}
         <div className="space-y-2">
           <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-1">
@@ -174,7 +214,7 @@ export function Settings({ onBack }: SettingsProps) {
           <div className="bg-slate-800/60 rounded-xl border border-slate-700/50 p-4">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
-                <Waves className="h-5 w-5 text-white" strokeWidth={2} />
+                <Printer className="h-5 w-5 text-white" strokeWidth={2} />
               </div>
               <div>
                 <p className="text-sm font-semibold text-slate-200">OpenSea Print Server</p>

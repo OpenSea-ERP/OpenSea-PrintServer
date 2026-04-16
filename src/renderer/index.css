@@ -65,3 +65,16 @@ input:focus {
 .animate-loading-bar {
   animation: loading-bar 1.5s ease-in-out infinite;
 }
+
+/* Drawer slide-in from right */
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+.animate-slide-in-right {
+  animation: slide-in-right 0.2s ease-out;
+}

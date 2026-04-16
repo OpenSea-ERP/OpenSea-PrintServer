@@ -6,7 +6,7 @@ import { Settings } from './pages/Settings';
 import { UpdateModal } from './components/UpdateModal';
 import { invokeIpc, useIpcEvent } from './hooks/useIpc';
 import type { AgentStatus, UpdateStatus } from './preload';
-import { Waves } from 'lucide-react';
+import { Printer } from 'lucide-react';
 
 type AppView = 'loading' | 'empty' | 'pairing' | 'dashboard' | 'settings';
 
@@ -16,16 +16,12 @@ export function App() {
   const [updateModal, setUpdateModal] = useState<UpdateStatus | null>(null);
   const [manualUpdateCheck, setManualUpdateCheck] = useState(false);
 
-  // Listen for manual update check trigger from tray
   useIpcEvent('updater:manual-check', useCallback(() => {
     setManualUpdateCheck(true);
   }, []));
 
-  // Listen to updater events globally
   useIpcEvent<UpdateStatus>('updater:status', useCallback((data: UpdateStatus) => {
     const mapped = data.status === 'up-to-date' ? 'not-available' : data.status;
-    // Auto-check: only show modal for actionable states (available/downloading/downloaded)
-    // Manual check (from tray): show all states including "tudo atualizado" and errors
     const alwaysShow = ['available', 'downloading', 'downloaded'].includes(mapped);
     if (alwaysShow || manualUpdateCheck) {
       setUpdateModal({ ...data, status: mapped as UpdateStatus['status'] });
@@ -35,7 +31,6 @@ export function App() {
     }
   }, [manualUpdateCheck]));
 
-  // Listen for connection status changes from WebSocket
   useIpcEvent<string>('connection:status', useCallback((connStatus: string) => {
     setStatus((prev) => prev ? { ...prev, connected: connStatus === 'connected' } : prev);
   }, []));
@@ -96,11 +91,13 @@ export function App() {
             status={status}
             onRefreshStatus={checkStatus}
             onOpenSettings={() => setView('settings')}
-            onUnpair={handleUnpair}
           />
         )}
         {view === 'settings' && (
-          <Settings onBack={() => setView('dashboard')} />
+          <Settings
+            onBack={() => setView('dashboard')}
+            onUnpair={handleUnpair}
+          />
         )}
       </div>
     </div>
@@ -110,12 +107,10 @@ export function App() {
 function LoadingScreen() {
   return (
     <div className="h-full flex flex-col items-center justify-center gap-6">
-      {/* Animated logo */}
       <div className="relative">
         <div className="h-20 w-20 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/20 animate-pulse">
-          <Waves className="h-10 w-10 text-white" strokeWidth={1.8} />
+          <Printer className="h-10 w-10 text-white" strokeWidth={1.8} />
         </div>
-        {/* Orbiting dot */}
         <div className="absolute -inset-3 animate-spin" style={{ animationDuration: '3s' }}>
           <div className="h-2.5 w-2.5 rounded-full bg-blue-400 shadow-lg shadow-blue-400/50" />
         </div>
@@ -128,7 +123,6 @@ function LoadingScreen() {
         <p className="text-sm text-slate-500">Iniciando...</p>
       </div>
 
-      {/* Subtle progress bar */}
       <div className="w-32 h-1 rounded-full bg-slate-800 overflow-hidden">
         <div className="h-full w-1/2 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 animate-loading-bar" />
       </div>
