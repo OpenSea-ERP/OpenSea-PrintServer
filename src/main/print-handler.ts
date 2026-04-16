@@ -1,12 +1,9 @@
-import { exec } from 'child_process';
-import { promisify } from 'util';
+import { spawn } from 'child_process';
 import { writeFile, unlink } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 import log from 'electron-log';
-
-const execAsync = promisify(exec);
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -15,15 +12,18 @@ export interface PrintResult {
   error?: string;
 }
 
+type PrintFormat = 'pdf' | 'postscript' | 'raw';
+
+const MAX_COPIES = 999;
+const PDF_TIMEOUT_MS = 60_000;
+const RAW_TIMEOUT_MS = 30_000;
+const KILL_GRACE_MS = 1_000;
+
 // ── Public API ───────────────────────────────────────────────────────────────
 
 /**
- * Execute a print job by sending data to the specified printer.
- *
- * @param jobId      - Unique job identifier for logging/tracking
- * @param printerName - OS printer name to send the job to
- * @param data       - Raw print data (PDF or raw bytes)
- * @param copies     - Number of copies to print
+ * Executa um job de impressão enviando `data` para a impressora indicada.
+ * Validações: impressora existe, copies em [1, 999], formato reconhecido.
  */
 export async function executePrint(
   jobId: string,
@@ -31,26 +31,53 @@ export async function executePrint(
   data: Buffer,
   copies: number,
 ): Promise<PrintResult> {
-  log.info(`[Print] Job ${jobId}: printing ${copies} cop(ies) to "${printerName}" (${data.length} bytes)`);
+  log.info(`[Print] Job ${jobId}: ${copies} cop(ies) → "${printerName}" (${data.length} bytes)`);
+
+  if (!Number.isInteger(copies) || copies < 1 || copies > MAX_COPIES) {
+    return { success: false, error: `copies deve estar entre 1 e ${MAX_COPIES}` };
+  }
+
+  if (!printerName || typeof printerName !== 'string') {
+    return { success: false, error: 'printerName inválido' };
+  }
+
+  if (!data || data.length === 0) {
+    return { success: false, error: 'data vazio' };
+  }
 
   try {
-    if (copies < 1) {
-      return { success: false, error: 'Copies must be at least 1' };
+    const exists = await printerExists(printerName);
+    if (!exists) {
+      return { success: false, error: `Impressora "${printerName}" não encontrada no sistema` };
     }
+
+    const format = detectFormat(data);
+    log.info(`[Print] Job ${jobId}: formato detectado=${format}`);
 
     switch (process.platform) {
       case 'win32':
-        return await printWindows(jobId, printerName, data, copies);
+        return await printWindows(jobId, printerName, data, copies, format);
       case 'darwin':
       case 'linux':
         return await printUnix(jobId, printerName, data, copies);
       default:
-        return { success: false, error: `Unsupported platform: ${process.platform}` };
+        return { success: false, error: `Plataforma não suportada: ${process.platform}` };
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    log.error(`[Print] Job ${jobId}: failed — ${message}`);
+    log.error(`[Print] Job ${jobId}: falha — ${message}`);
     return { success: false, error: message };
+  }
+}
+
+async function printerExists(printerName: string): Promise<boolean> {
+  try {
+    const { detectPrinters } = await import('./printer-detector');
+    const printers = await detectPrinters();
+    return printers.some((p) => p.name === printerName);
+  } catch (err) {
+    log.warn('[Print] Falha ao verificar impressora (seguindo mesmo assim):', err);
+    return true; // fallback: não bloqueia impressão
   }
 }
 
@@ -61,15 +88,14 @@ async function printWindows(
   printerName: string,
   data: Buffer,
   copies: number,
+  format: PrintFormat,
 ): Promise<PrintResult> {
-  const tempPath = getTempFilePath(data);
+  const tempPath = getTempFilePath(format);
 
   try {
     await writeFile(tempPath, data);
 
-    const isPdf = isPdfData(data);
-
-    if (isPdf) {
+    if (format === 'pdf') {
       return await printWindowsPdf(jobId, printerName, tempPath, copies);
     }
 
@@ -85,42 +111,43 @@ async function printWindowsPdf(
   filePath: string,
   copies: number,
 ): Promise<PrintResult> {
-  // Try SumatraPDF first (silent printing, widely used)
-  try {
-    const sumatraCmd = [
-      'SumatraPDF',
-      '-print-to', `"${printerName}"`,
-      '-print-settings', `"${copies}x"`,
-      '-silent',
-      `"${filePath}"`,
-    ].join(' ');
+  // Tenta SumatraPDF primeiro (silent print, leve)
+  const sumatraRes = await runChild(
+    'SumatraPDF',
+    ['-print-to', printerName, '-print-settings', `${copies}x`, '-silent', filePath],
+    PDF_TIMEOUT_MS,
+  );
 
-    await execAsync(sumatraCmd, { timeout: 60_000 });
-    log.info(`[Print] Job ${jobId}: sent via SumatraPDF`);
+  if (sumatraRes.success) {
+    log.info(`[Print] Job ${jobId}: enviado via SumatraPDF`);
     return { success: true };
-  } catch {
-    log.debug(`[Print] Job ${jobId}: SumatraPDF not available, trying PowerShell`);
   }
 
-  // Fallback: Start-Process with default PDF handler
-  const escapedPrinter = printerName.replace(/'/g, "''");
-  const escapedPath = filePath.replace(/'/g, "''");
+  log.debug(`[Print] Job ${jobId}: SumatraPDF indisponível (${sumatraRes.error}), tentando PowerShell PrintTo`);
 
   for (let i = 0; i < copies; i++) {
-    const psCmd = `Start-Process -FilePath '${escapedPath}' -Verb PrintTo -ArgumentList '${escapedPrinter}' -Wait -WindowStyle Hidden`;
+    const psResult = await runChild(
+      'powershell',
+      [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        `Start-Process -FilePath $args[0] -Verb PrintTo -ArgumentList $args[1] -Wait -WindowStyle Hidden`,
+        '-args',
+        filePath,
+        printerName,
+      ],
+      PDF_TIMEOUT_MS,
+    );
 
-    try {
-      await execAsync(`powershell -NoProfile -Command "${psCmd}"`, {
-        timeout: 60_000,
-      });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      log.error(`[Print] Job ${jobId}: PowerShell PrintTo failed (copy ${i + 1}): ${message}`);
-      return { success: false, error: `PrintTo failed on copy ${i + 1}: ${message}` };
+    if (!psResult.success) {
+      const msg = `PowerShell PrintTo falhou (cópia ${i + 1}): ${psResult.error}`;
+      log.error(`[Print] Job ${jobId}: ${msg}`);
+      return { success: false, error: msg };
     }
   }
 
-  log.info(`[Print] Job ${jobId}: sent via PowerShell PrintTo`);
+  log.info(`[Print] Job ${jobId}: enviado via PowerShell PrintTo (${copies} cópias)`);
   return { success: true };
 }
 
@@ -130,25 +157,30 @@ async function printWindowsRaw(
   filePath: string,
   copies: number,
 ): Promise<PrintResult> {
-  const escapedPrinter = printerName.replace(/'/g, "''");
-  const escapedPath = filePath.replace(/'/g, "''");
-
-  // Use Out-Printer for raw data
+  // Out-Printer aceita nome via -Name; argumentos como array, sem concatenação de string
   for (let i = 0; i < copies; i++) {
-    const psCmd = `Get-Content -Path '${escapedPath}' -Encoding Byte -Raw | Out-Printer -Name '${escapedPrinter}'`;
+    const res = await runChild(
+      'powershell',
+      [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        'Get-Content -Path $args[0] -Encoding Byte -Raw | Out-Printer -Name $args[1]',
+        '-args',
+        filePath,
+        printerName,
+      ],
+      RAW_TIMEOUT_MS,
+    );
 
-    try {
-      await execAsync(`powershell -NoProfile -Command "${psCmd}"`, {
-        timeout: 30_000,
-      });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      log.error(`[Print] Job ${jobId}: Out-Printer failed (copy ${i + 1}): ${message}`);
-      return { success: false, error: `Out-Printer failed on copy ${i + 1}: ${message}` };
+    if (!res.success) {
+      const msg = `Out-Printer falhou (cópia ${i + 1}): ${res.error}`;
+      log.error(`[Print] Job ${jobId}: ${msg}`);
+      return { success: false, error: msg };
     }
   }
 
-  log.info(`[Print] Job ${jobId}: sent via Out-Printer`);
+  log.info(`[Print] Job ${jobId}: enviado via Out-Printer`);
   return { success: true };
 }
 
@@ -160,35 +192,113 @@ async function printUnix(
   data: Buffer,
   copies: number,
 ): Promise<PrintResult> {
-  const tempPath = getTempFilePath(data);
+  const tempPath = getTempFilePath(detectFormat(data));
 
   try {
     await writeFile(tempPath, data);
 
-    // lp -d <printer> -n <copies> <file>
-    const escapedPrinter = printerName.replace(/'/g, "'\\''");
-    const escapedPath = tempPath.replace(/'/g, "'\\''");
+    const res = await runChild(
+      'lp',
+      ['-d', printerName, '-n', String(copies), tempPath],
+      RAW_TIMEOUT_MS,
+    );
 
-    const cmd = `lp -d '${escapedPrinter}' -n ${copies} '${escapedPath}'`;
+    if (!res.success) {
+      return { success: false, error: `lp falhou: ${res.error}` };
+    }
 
-    const { stdout } = await execAsync(cmd, { timeout: 30_000 });
-    log.info(`[Print] Job ${jobId}: sent via lp — ${stdout.trim()}`);
-
+    log.info(`[Print] Job ${jobId}: enviado via lp — ${res.stdout?.trim() ?? ''}`);
     return { success: true };
   } finally {
     await cleanupTempFile(tempPath);
   }
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── spawn helper com kill forçado ────────────────────────────────────────────
 
-function isPdfData(data: Buffer): boolean {
-  // PDF magic number: %PDF
-  return data.length >= 4 && data[0] === 0x25 && data[1] === 0x50 && data[2] === 0x44 && data[3] === 0x46;
+interface ChildResult {
+  success: boolean;
+  stdout?: string;
+  stderr?: string;
+  error?: string;
 }
 
-function getTempFilePath(data: Buffer): string {
-  const ext = isPdfData(data) ? '.pdf' : '.prn';
+function runChild(command: string, args: string[], timeoutMs: number): Promise<ChildResult> {
+  return new Promise((resolve) => {
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+
+    const child = spawn(command, args, {
+      windowsHide: true,
+      shell: false, // crítico: sem shell, argumentos não sofrem interpolação
+    });
+
+    const timeout = setTimeout(() => {
+      if (settled) return;
+      log.warn(`[Print] Timeout ${timeoutMs}ms — matando processo ${command}`);
+      child.kill('SIGTERM');
+      setTimeout(() => {
+        if (!child.killed) {
+          try { child.kill('SIGKILL'); } catch { /* noop */ }
+        }
+      }, KILL_GRACE_MS);
+    }, timeoutMs);
+
+    child.stdout?.on('data', (buf) => {
+      stdout += buf.toString();
+    });
+
+    child.stderr?.on('data', (buf) => {
+      stderr += buf.toString();
+    });
+
+    child.on('error', (err) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      resolve({ success: false, error: err.message });
+    });
+
+    child.on('close', (code, signal) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+
+      if (signal === 'SIGTERM' || signal === 'SIGKILL') {
+        resolve({ success: false, error: `Morto por timeout (${signal})`, stdout, stderr });
+        return;
+      }
+
+      if (code !== 0) {
+        resolve({
+          success: false,
+          error: `Exit code ${code}${stderr ? `: ${stderr.trim()}` : ''}`,
+          stdout,
+          stderr,
+        });
+        return;
+      }
+
+      resolve({ success: true, stdout, stderr });
+    });
+  });
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function detectFormat(data: Buffer): PrintFormat {
+  if (data.length >= 4 && data[0] === 0x25 && data[1] === 0x50 && data[2] === 0x44 && data[3] === 0x46) {
+    return 'pdf'; // %PDF
+  }
+  if (data.length >= 2 && data[0] === 0x25 && data[1] === 0x21) {
+    return 'postscript'; // %!
+  }
+  return 'raw';
+}
+
+function getTempFilePath(format: PrintFormat): string {
+  const ext = format === 'pdf' ? '.pdf' : format === 'postscript' ? '.ps' : '.prn';
   return join(tmpdir(), `opensea-print-${randomUUID()}${ext}`);
 }
 
@@ -196,6 +306,6 @@ async function cleanupTempFile(filePath: string): Promise<void> {
   try {
     await unlink(filePath);
   } catch {
-    // File may have already been cleaned up
+    // Já removido
   }
 }
