@@ -28,6 +28,7 @@
     "electron-log": "^5.1.7",
     "electron-store": "^8.2.0",
     "electron-updater": "^6.2.1",
+    "keytar": "^7.9.0",
     "ws": "^8.16.0"
   },
   "devDependencies": {
@@ -55,6 +56,10 @@
     "appId": "com.opensea.print-server",
     "productName": "OpenSea Print Server",
     "artifactName": "OpenSea-PrintServer-Setup-${version}.${ext}",
+    "asar": true,
+    "asarUnpack": [
+      "**/node_modules/keytar/**"
+    ],
     "directories": {
       "output": "release"
     },
