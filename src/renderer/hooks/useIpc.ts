@@ -1,20 +1,31 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 
+const IPC_TIMEOUT_MS = 30_000;
+
 /**
- * Invoke an IPC channel and return a promise.
+ * Invoca um canal IPC com timeout global. Impede UI congelada caso o main trave.
  */
 export async function invokeIpc<T = unknown>(
   channel: string,
   ...args: unknown[]
 ): Promise<T> {
   if (!window.electronAPI) {
-    throw new Error('electronAPI not available — running outside Electron?');
+    throw new Error('electronAPI indisponível — rodando fora do Electron?');
   }
-  return window.electronAPI.invoke<T>(channel, ...args);
+
+  return Promise.race<T>([
+    window.electronAPI.invoke<T>(channel, ...args),
+    new Promise<T>((_, reject) =>
+      setTimeout(
+        () => reject(new Error(`IPC timeout após ${IPC_TIMEOUT_MS}ms no canal "${channel}"`)),
+        IPC_TIMEOUT_MS,
+      ),
+    ),
+  ]);
 }
 
 /**
- * React hook for IPC calls with loading/error states and refetch.
+ * React hook para IPC com loading/error/refetch.
  */
 export function useIpc<T = unknown>(channel: string, ...args: unknown[]) {
   const [data, setData] = useState<T | null>(null);
@@ -54,17 +65,24 @@ export function useIpc<T = unknown>(channel: string, ...args: unknown[]) {
 }
 
 /**
- * Subscribe to an IPC event channel. Returns cleanup automatically.
+ * Subscreve a um canal IPC. Mantém identity do handler estável via ref —
+ * evita vazamento de listeners quando o caller passa um handler inline novo a cada render.
  */
 export function useIpcEvent<T = unknown>(
   channel: string,
   handler: (data: T) => void,
 ) {
+  const handlerRef = useRef(handler);
+
+  useEffect(() => {
+    handlerRef.current = handler;
+  }, [handler]);
+
   useEffect(() => {
     if (!window.electronAPI) return;
     const unsubscribe = window.electronAPI.on(channel, (data) => {
-      handler(data as T);
+      handlerRef.current(data as T);
     });
     return unsubscribe;
-  }, [channel, handler]);
+  }, [channel]);
 }
