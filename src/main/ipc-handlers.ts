@@ -7,6 +7,7 @@ import { isConnected } from './connection-state';
 import * as autoLaunch from './auto-launch';
 import { setDeviceToken, deleteDeviceToken } from './secure-store';
 import { detectorToCode } from './printer-status';
+import { getJobs, cancelJob, manageJob } from './job-queue';
 
 // ── Rate limiter simples (janela de tempo mínimo entre chamadas) ──────────────
 const lastCalled = new Map<string, number>();
@@ -269,6 +270,50 @@ function registerIpcHandlers(): void {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Erro desconhecido';
       log.error('[ipc] auto-launch:toggle erro:', message);
+      return { success: false, error: message };
+    }
+  });
+
+  // ── Print Queue ──────────────────────────────────────────────────────
+  ipcMain.handle('printers:jobs', async (_event, printerName: string) => {
+    if (!rateLimit('printers:jobs', 2_000)) {
+      return [];
+    }
+    try {
+      if (!printerName || typeof printerName !== 'string') return [];
+      return await getJobs(printerName);
+    } catch (error) {
+      log.error('[ipc] printers:jobs erro:', error);
+      return [];
+    }
+  });
+
+  ipcMain.handle('printers:cancel-job', async (_event, printerName: string, jobId: number) => {
+    if (!rateLimit('printers:cancel-job', 1_000)) {
+      return { success: false, error: 'Aguarde antes de tentar novamente' };
+    }
+    try {
+      return await cancelJob(printerName, jobId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Erro desconhecido';
+      log.error('[ipc] printers:cancel-job erro:', message);
+      return { success: false, error: message };
+    }
+  });
+
+  ipcMain.handle('printers:manage-job', async (_event, printerName: string, jobId: number, action: string) => {
+    if (!rateLimit('printers:manage-job', 1_000)) {
+      return { success: false, error: 'Aguarde antes de tentar novamente' };
+    }
+    try {
+      const validActions = ['restart', 'pause', 'resume', 'clear-all'];
+      if (!validActions.includes(action)) {
+        return { success: false, error: `Ação inválida: ${action}` };
+      }
+      return await manageJob(printerName, jobId, action as 'restart' | 'pause' | 'resume' | 'clear-all');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Erro desconhecido';
+      log.error('[ipc] printers:manage-job erro:', message);
       return { success: false, error: message };
     }
   });
