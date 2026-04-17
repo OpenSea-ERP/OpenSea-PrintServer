@@ -66,7 +66,7 @@ export function Dashboard({ status, onOpenSettings }: DashboardProps) {
     setTimeout(() => setRefreshing(false), 600);
   }, [refetchPrinters]);
 
-  const handlePrinterDoubleClick = useCallback((printer: PrinterInfo) => {
+  const handlePrinterClick = useCallback((printer: PrinterInfo) => {
     setDrawerPrinter({ name: printer.name, status: printer.status });
   }, []);
 
@@ -123,6 +123,9 @@ export function Dashboard({ status, onOpenSettings }: DashboardProps) {
             </div>
           </div>
         </div>
+
+        {/* Divider between app header and list header */}
+        <div className="h-px bg-slate-800 -mx-5 mt-3" />
 
         {/* Sub-header: detected printers count + verify button — aligned bottom */}
         <div className="flex items-end justify-between mt-3 pb-0">
@@ -185,8 +188,8 @@ export function Dashboard({ status, onOpenSettings }: DashboardProps) {
                 <div
                   key={printer.name}
                   className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-slate-700/30 transition-colors select-none"
-                  onDoubleClick={() => handlePrinterDoubleClick(printer)}
-                  title="Clique duas vezes para ver a fila de impressão"
+                  onClick={() => handlePrinterClick(printer)}
+                  title="Clique para ver a fila de impressão"
                 >
                   <div className={cn(
                     'h-9 w-9 rounded-lg flex items-center justify-center flex-shrink-0',

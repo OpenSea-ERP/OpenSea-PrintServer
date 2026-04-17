@@ -20,6 +20,9 @@ let tray: Tray | null = null;
 let isQuitting = false;
 const wsClient = new PrintServerWSClient();
 
+const wasOpenedAsHidden =
+  process.argv.includes('--hidden') || app.getLoginItemSettings().wasOpenedAsHidden;
+
 function sendToRenderer(channel: string, data?: unknown): void {
   const windows = BrowserWindow.getAllWindows();
   for (const win of windows) {
@@ -130,15 +133,25 @@ function getAssetPath(filename: string): string {
   return path.join(__dirname, '..', '..', 'assets', filename);
 }
 
+function showMainWindow(): void {
+  if (!mainWindow) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.setSkipTaskbar(false);
+  mainWindow.show();
+  mainWindow.focus();
+}
+
 function createWindow(): BrowserWindow {
   mainWindow = new BrowserWindow({
     width: 440,
-    height: 680,
+    height: 780,
     resizable: false,
     frame: true,
     autoHideMenuBar: true,
     titleBarStyle: 'default',
     icon: getAssetPath('icon.png'),
+    show: !wasOpenedAsHidden,
+    skipTaskbar: wasOpenedAsHidden,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -188,10 +201,7 @@ function createTray(): void {
   updateTrayMenu(false);
 
   tray.on('double-click', () => {
-    if (mainWindow) {
-      mainWindow.show();
-      mainWindow.focus();
-    }
+    showMainWindow();
   });
 
   log.info('[main] Ícone na bandeja criado');
@@ -206,10 +216,7 @@ function updateTrayMenu(isOnline: boolean): void {
     {
       label: 'Abrir',
       click: () => {
-        if (mainWindow) {
-          mainWindow.show();
-          mainWindow.focus();
-        }
+        showMainWindow();
       },
     },
     { type: 'separator' },
@@ -233,10 +240,7 @@ function updateTrayMenu(isOnline: boolean): void {
           }
         }
         // Show window so user sees the modal
-        if (mainWindow) {
-          mainWindow.show();
-          mainWindow.focus();
-        }
+        showMainWindow();
         checkForUpdates().catch((err) => {
           log.error('[tray] Erro ao verificar atualizações:', err);
         });
@@ -272,11 +276,7 @@ if (!gotTheLock) {
   app.quit();
 } else {
   app.on('second-instance', () => {
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.show();
-      mainWindow.focus();
-    }
+    showMainWindow();
   });
 
   app.on('ready', async () => {
@@ -331,7 +331,7 @@ if (!gotTheLock) {
     if (mainWindow === null) {
       createWindow();
     } else {
-      mainWindow.show();
+      showMainWindow();
     }
   });
 }
