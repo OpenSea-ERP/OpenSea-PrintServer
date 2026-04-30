@@ -81,7 +81,9 @@
           ]
         }
       ],
-      "icon": "assets/icon.ico"
+      "icon": "assets/icon.ico",
+      "certificateFile": "${env.CSC_LINK}",
+      "certificatePassword": "${env.CSC_KEY_PASSWORD}"
     },
     "mac": {
       "target": [
@@ -118,7 +120,7 @@
     "publish": {
       "provider": "github",
       "owner": "OpenSea-ERP",
-      "repo": "OpenSea-PrintServer"
+      "repo": "OpenSea-PrintServer-Releases"
     }
   }
 }

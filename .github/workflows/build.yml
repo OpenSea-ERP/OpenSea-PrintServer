@@ -1,9 +1,11 @@
-name: Build & Release
+name: Build (multi-OS smoke)
+
+# Multi-OS build verification. NOT responsável por release oficial —
+# release.yml é quem publica no OpenSea-PrintServer-Releases via
+# electron-builder com codesign Authenticode (Milestone v3.0 / SAT-RELEASE-01..03).
 
 on:
-  push:
-    tags:
-      - 'v*'
+  pull_request:
   workflow_dispatch:
 
 env:
@@ -124,40 +126,7 @@ jobs:
             release/*.AppImage
           if-no-files-found: error
 
-  release:
-    needs: [build-windows, build-mac, build-linux]
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
-    permissions:
-      contents: write
-    steps:
-      - name: Download Windows artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: windows-artifacts
-          path: artifacts/windows
-
-      - name: Download macOS artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: macos-artifacts
-          path: artifacts/macos
-
-      - name: Download Linux artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: linux-artifacts
-          path: artifacts/linux
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          name: OpenSea Print Server ${{ github.ref_name }}
-          draft: false
-          prerelease: false
-          generate_release_notes: true
-          files: |
-            artifacts/windows/*.exe
-            artifacts/macos/*.dmg
-            artifacts/linux/*.AppImage
+  # Release job removida em 2026-04-30 (Milestone v3.0 / SAT-RELEASE-01..03).
+  # Releases agora são publicadas pelo .github/workflows/release.yml
+  # diretamente no repo público OpenSea-PrintServer-Releases via
+  # electron-builder com codesign Authenticode obrigatório.

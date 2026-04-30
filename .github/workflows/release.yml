@@ -1,0 +1,70 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Disable autocrlf
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Cache Electron
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~\AppData\Local\electron\Cache
+            ~\AppData\Local\electron-builder\Cache
+          key: electron-${{ hashFiles('package-lock.json') }}
+          restore-keys: electron-
+
+      - name: Install
+        run: npm ci
+
+      - name: Build (renderer + main)
+        run: npm run build
+
+      - name: Build & publish to GitHub Releases
+        env:
+          # Releases vão para o repo PÚBLICO OpenSea-PrintServer-Releases.
+          # `secrets.GITHUB_TOKEN` só dá permissão no repo atual (privado),
+          # então usamos um PAT dedicado com escopo no repo de releases.
+          # Mesmo padrão do OpenSea-Horus — Milestone v3.0 / Satellite Contract v1.
+          GH_TOKEN: ${{ secrets.RELEASES_PAT }}
+          # Code signing Authenticode (SAT-RELEASE-03):
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+        run: npx electron-builder --win --x64 --publish always
+
+      # electron-builder cria a release como draft por design.
+      # Promovemos para "Latest" automaticamente para que electron-updater
+      # consiga encontrá-la (releases draft não são visíveis pro updater).
+      - name: Promote release from draft to latest
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_PAT }}
+        run: gh release edit ${{ github.ref_name }} --repo OpenSea-ERP/OpenSea-PrintServer-Releases --draft=false --latest
+
+      - name: Upload installer as workflow artifact (backup)
+        uses: actions/upload-artifact@v5
+        with:
+          name: printserver-${{ github.ref_name }}-win-x64
+          path: |
+            release/*.exe
+            release/latest.yml
+            release/*.blockmap
+          if-no-files-found: error
+          retention-days: 90
