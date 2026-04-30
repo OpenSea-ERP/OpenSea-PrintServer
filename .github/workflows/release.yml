@@ -45,16 +45,21 @@ jobs:
           # então usamos um PAT dedicado com escopo no repo de releases.
           # Mesmo padrão do OpenSea-Horus — Milestone v3.0 / Satellite Contract v1.
           GH_TOKEN: ${{ secrets.RELEASES_PAT }}
-          # Code signing Authenticode (SAT-RELEASE-03 + SAT-CI-01).
-          # Ausência destes secrets resulta em build unsigned, que é rejeitado
-          # pelo passo "Verify Authenticode signature" abaixo (release aborta).
+          # Code signing Authenticode (SAT-RELEASE-03 + SAT-CI-01-rev2).
+          # OPCIONAL: quando os secrets estão presentes, o build assina e o
+          # sentinel abaixo valida. Quando ausentes, o build sai unsigned e o
+          # sentinel é PULADO. Política decidida em SAT-CI-01-rev2 — cert
+          # Authenticode tem renovação anual + custo, fica opcional.
           WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
           WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
         run: npx electron-builder --win --x64 --publish always
 
-      - name: Verify Authenticode signature (sentinel — SAT-CI-01)
-        # Falha o release se o instalador estiver unsigned. Previne publicar
-        # binários não-assinados acidentalmente. Mesmo padrão do Horus.
+      - name: Verify Authenticode signature (sentinel — SAT-CI-01-rev2)
+        # OPCIONAL: só roda quando WIN_CSC_LINK está configurado. Quando o
+        # secret estiver presente, falha o release se o binário não estiver
+        # assinado (proteção anti-acidente). Quando ausente, o release segue
+        # unsigned — política SAT-CI-01-rev2 (cert Authenticode é opcional).
+        if: ${{ secrets.WIN_CSC_LINK != '' }}
         shell: pwsh
         run: |
           $exeFiles = Get-ChildItem release -Filter "OpenSea-PrintServer-Setup-*.exe" -ErrorAction SilentlyContinue

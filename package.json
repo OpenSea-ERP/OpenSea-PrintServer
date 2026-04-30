@@ -82,8 +82,7 @@
         }
       ],
       "icon": "assets/icon.ico",
-      "certificateFile": "${env.WIN_CSC_LINK}",
-      "certificatePassword": "${env.WIN_CSC_KEY_PASSWORD}"
+      "publisherName": "OpenSea ERP"
     },
     "mac": {
       "target": [
