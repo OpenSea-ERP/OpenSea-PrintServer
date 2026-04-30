@@ -45,10 +45,41 @@ jobs:
           # então usamos um PAT dedicado com escopo no repo de releases.
           # Mesmo padrão do OpenSea-Horus — Milestone v3.0 / Satellite Contract v1.
           GH_TOKEN: ${{ secrets.RELEASES_PAT }}
-          # Code signing Authenticode (SAT-RELEASE-03):
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          # Code signing Authenticode (SAT-RELEASE-03 + SAT-CI-01).
+          # Ausência destes secrets resulta em build unsigned, que é rejeitado
+          # pelo passo "Verify Authenticode signature" abaixo (release aborta).
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
         run: npx electron-builder --win --x64 --publish always
+
+      - name: Verify Authenticode signature (sentinel — SAT-CI-01)
+        # Falha o release se o instalador estiver unsigned. Previne publicar
+        # binários não-assinados acidentalmente. Mesmo padrão do Horus.
+        shell: pwsh
+        run: |
+          $exeFiles = Get-ChildItem release -Filter "OpenSea-PrintServer-Setup-*.exe" -ErrorAction SilentlyContinue
+
+          if (-not $exeFiles) {
+            Write-Error "No installer files found in release/ directory"
+            exit 1
+          }
+
+          $allValid = $true
+          foreach ($file in $exeFiles) {
+            $sig = Get-AuthenticodeSignature $file.FullName
+            Write-Host "[$($file.Name)] Signature status: $($sig.Status)"
+            if ($sig.Status -ne 'Valid') {
+              Write-Error "[$($file.Name)] Signature invalid or missing: $($sig.StatusMessage)"
+              $allValid = $false
+            }
+          }
+
+          if (-not $allValid) {
+            Write-Error "One or more installers failed Authenticode verification. Release aborted."
+            exit 1
+          }
+
+          Write-Host "All installers passed Authenticode signature verification."
 
       # electron-builder cria a release como draft por design.
       # Promovemos para "Latest" automaticamente para que electron-updater

@@ -82,8 +82,8 @@
         }
       ],
       "icon": "assets/icon.ico",
-      "certificateFile": "${env.CSC_LINK}",
-      "certificatePassword": "${env.CSC_KEY_PASSWORD}"
+      "certificateFile": "${env.WIN_CSC_LINK}",
+      "certificatePassword": "${env.WIN_CSC_KEY_PASSWORD}"
     },
     "mac": {
       "target": [
