@@ -12,7 +12,7 @@ import log from "electron-log";
 import { registerIpcHandlers } from "./ipc-handlers";
 import { setupUpdater, checkForUpdates } from "./updater";
 import { setup as setupAutoLaunch } from "./auto-launch";
-import { store } from "./store";
+import { store, migrateStaleApiUrl } from "./store";
 import { PrintServerWSClient } from "./ws-client";
 import { setConnected } from "./connection-state";
 import { getDeviceToken } from "./secure-store";
@@ -338,6 +338,11 @@ if (!gotTheLock) {
 
   app.on("ready", async () => {
     log.info("[main] Aplicação pronta");
+
+    // Reescreve apiUrl obsoleto (ex.: localhost herdado de instalações
+    // 1.4.0–1.6.0) antes de qualquer IPC. Sem isso o `agent:pair` falha
+    // com `URL da API inválida` em produção.
+    migrateStaleApiUrl();
 
     Menu.setApplicationMenu(null);
 
