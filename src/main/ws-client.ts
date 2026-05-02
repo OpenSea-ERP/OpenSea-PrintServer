@@ -1,13 +1,18 @@
-import WebSocket from 'ws';
-import { EventEmitter } from 'events';
-import log from 'electron-log';
+import WebSocket from "ws";
+import { EventEmitter } from "events";
+import log from "electron-log";
+import type {
+  WsAppReleasePublishedMessage,
+  WsDeviceRevokedMessage,
+  WsWelcomeMessage,
+} from "@opensea/satellite-contract";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-export type ConnectionState = 'disconnected' | 'connecting' | 'connected';
+export type ConnectionState = "disconnected" | "connecting" | "connected";
 
 export interface PrintCommand {
-  type: 'print';
+  type: "print";
   jobId: string;
   printerId: string;
   data: string; // base64-encoded
@@ -15,43 +20,64 @@ export interface PrintCommand {
 }
 
 export interface RequestPrintersCommand {
-  type: 'request-printers';
+  type: "request-printers";
 }
 
-export type IncomingMessage = PrintCommand | RequestPrintersCommand;
+/**
+ * Print-specific command set (server → client). Stays local because the
+ * shared `@opensea/satellite-contract` package only covers cross-satellite
+ * concerns (lifecycle: hello/welcome, releases, revocation, heartbeat).
+ */
+export type PrintIncomingMessage = PrintCommand | RequestPrintersCommand;
+
+/**
+ * Shared satellite messages (server → client). Adopted from
+ * `@opensea/satellite-contract@^0.1.0`. Currently the API does not push
+ * these to print-agent connections — that wiring lands in Phase 14
+ * (SAT-OBSERVABILITY-01). The PrintServer recognises and dispatches them
+ * already so it is forward-compatible the moment the broadcast wiring
+ * goes live, and so a new build does not need to re-cut just to receive
+ * release notifications.
+ */
+export type SharedIncomingMessage =
+  | WsWelcomeMessage
+  | WsAppReleasePublishedMessage
+  | WsDeviceRevokedMessage;
+
+export type IncomingMessage = PrintIncomingMessage | SharedIncomingMessage;
 
 export interface PrinterInfo {
   name: string;
-  type: 'local' | 'network' | 'virtual';
+  type: "local" | "network" | "virtual";
   isDefault: boolean;
-  status: 'ONLINE' | 'OFFLINE' | 'ERROR' | 'UNKNOWN';
+  status: "ONLINE" | "OFFLINE" | "ERROR" | "UNKNOWN";
 }
 
 export interface PrintResultMessage {
-  type: 'print-result';
+  type: "print-result";
   jobId: string;
   success: boolean;
   error?: string;
 }
 
 export interface PrintersMessage {
-  type: 'printers';
+  type: "printers";
   printers: PrinterInfo[];
 }
 
 export interface HeartbeatMessage {
-  type: 'heartbeat';
+  type: "heartbeat";
 }
 
 export interface HelloMessage {
-  type: 'hello';
+  type: "hello";
   protocolVersion: string;
   clientVersion: string;
 }
 
 export interface StatusMessage {
-  type: 'status';
-  status: 'ONLINE' | 'OFFLINE';
+  type: "status";
+  status: "ONLINE" | "OFFLINE";
 }
 
 export type OutgoingMessage =
@@ -61,7 +87,7 @@ export type OutgoingMessage =
   | PrintResultMessage
   | StatusMessage;
 
-type MessageHandler = (message: IncomingMessage) => void;
+type MessageHandler = (message: PrintIncomingMessage) => void;
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -70,31 +96,39 @@ const MAX_RECONNECT_DELAY = 30000;
 const HEARTBEAT_INTERVAL = 25000;
 const PONG_TIMEOUT = 10000;
 const MAX_PAYLOAD = 10 * 1024 * 1024; // 10MB
-const PROTOCOL_VERSION = '1.0';
+const PROTOCOL_VERSION = "1.0";
 // Evitar require do package.json via ts; versão do cliente é informacional
-const CLIENT_VERSION = process.env.npm_package_version ?? 'unknown';
+const CLIENT_VERSION = process.env.npm_package_version ?? "unknown";
 
 // ── Validation ───────────────────────────────────────────────────────────────
 
-function isValidIncomingMessage(raw: unknown): raw is IncomingMessage {
-  if (!raw || typeof raw !== 'object') return false;
+const VALID_DEVICE_REVOKED_REASONS = new Set([
+  "unpaired_by_user",
+  "unpaired_by_admin",
+  "force_revoked_by_admin",
+]);
+
+const VALID_RELEASE_KINDS = new Set(["EMPORION", "PRINT_SERVER", "HORUS"]);
+
+function isValidPrintMessage(raw: unknown): raw is PrintIncomingMessage {
+  if (!raw || typeof raw !== "object") return false;
   const msg = raw as { type?: unknown };
 
-  if (msg.type === 'request-printers') return true;
+  if (msg.type === "request-printers") return true;
 
-  if (msg.type === 'print') {
+  if (msg.type === "print") {
     const m = raw as Record<string, unknown>;
     return (
-      typeof m.jobId === 'string' &&
+      typeof m.jobId === "string" &&
       m.jobId.length > 0 &&
       m.jobId.length <= 128 &&
-      typeof m.printerId === 'string' &&
+      typeof m.printerId === "string" &&
       m.printerId.length > 0 &&
       m.printerId.length <= 256 &&
-      typeof m.data === 'string' &&
+      typeof m.data === "string" &&
       m.data.length > 0 &&
       m.data.length <= MAX_PAYLOAD &&
-      typeof m.copies === 'number' &&
+      typeof m.copies === "number" &&
       Number.isInteger(m.copies) &&
       m.copies >= 1 &&
       m.copies <= 999
@@ -104,19 +138,59 @@ function isValidIncomingMessage(raw: unknown): raw is IncomingMessage {
   return false;
 }
 
+function isValidSharedMessage(raw: unknown): raw is SharedIncomingMessage {
+  if (!raw || typeof raw !== "object") return false;
+  const msg = raw as Record<string, unknown>;
+
+  if (msg.type === "welcome") {
+    return (
+      typeof msg.terminalId === "string" &&
+      typeof msg.protocolVersion === "string"
+    );
+  }
+
+  if (msg.type === "app.release.published") {
+    return (
+      typeof msg.kind === "string" &&
+      VALID_RELEASE_KINDS.has(msg.kind) &&
+      typeof msg.version === "string" &&
+      typeof msg.downloadUrl === "string" &&
+      typeof msg.sha256 === "string" &&
+      msg.sha256.length === 64 &&
+      typeof msg.releasedAt === "string"
+    );
+  }
+
+  if (msg.type === "device.revoked") {
+    return (
+      typeof msg.reason === "string" &&
+      VALID_DEVICE_REVOKED_REASONS.has(msg.reason) &&
+      typeof msg.revokedAt === "string" &&
+      typeof msg.revokedBy === "object" &&
+      msg.revokedBy !== null
+    );
+  }
+
+  return false;
+}
+
+export function isValidIncomingMessage(raw: unknown): raw is IncomingMessage {
+  return isValidPrintMessage(raw) || isValidSharedMessage(raw);
+}
+
 // ── WebSocket Client ─────────────────────────────────────────────────────────
 
 export class PrintServerWSClient extends EventEmitter {
   private ws: WebSocket | null = null;
-  private apiUrl: string = '';
-  private agentToken: string = '';
+  private apiUrl: string = "";
+  private agentToken: string = "";
   private reconnectDelay: number = INITIAL_RECONNECT_DELAY;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private pongTimer: ReturnType<typeof setTimeout> | null = null;
   private messageHandler: MessageHandler | null = null;
   private intentionalDisconnect: boolean = false;
-  private _state: ConnectionState = 'disconnected';
+  private _state: ConnectionState = "disconnected";
 
   get state(): ConnectionState {
     return this._state;
@@ -125,7 +199,7 @@ export class PrintServerWSClient extends EventEmitter {
   private setState(state: ConnectionState): void {
     if (this._state === state) return;
     this._state = state;
-    this.emit('state', state);
+    this.emit("state", state);
     log.info(`[WS] Connection state: ${state}`);
   }
 
@@ -146,12 +220,12 @@ export class PrintServerWSClient extends EventEmitter {
     this.intentionalDisconnect = true;
     this.clearTimers();
     this.teardownSocket();
-    this.setState('disconnected');
+    this.setState("disconnected");
   }
 
   send(message: OutgoingMessage): boolean {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      log.warn('[WS] Cannot send message — not connected');
+      log.warn("[WS] Cannot send message — not connected");
       return false;
     }
 
@@ -159,7 +233,7 @@ export class PrintServerWSClient extends EventEmitter {
       this.ws.send(JSON.stringify(message));
       return true;
     } catch (err) {
-      log.error('[WS] Failed to send message:', err);
+      log.error("[WS] Failed to send message:", err);
       return false;
     }
   }
@@ -170,7 +244,7 @@ export class PrintServerWSClient extends EventEmitter {
     if (!this.ws) return;
     try {
       this.ws.removeAllListeners();
-      this.ws.close(1000, 'Client teardown');
+      this.ws.close(1000, "Client teardown");
     } catch {
       // Já fechado
     }
@@ -181,12 +255,14 @@ export class PrintServerWSClient extends EventEmitter {
     this.clearTimers();
     this.teardownSocket();
 
-    const wsProtocol = this.apiUrl.startsWith('https') ? 'wss' : 'ws';
-    const baseUrl = this.apiUrl.replace(/^https?/, wsProtocol).replace(/\/+$/, '');
+    const wsProtocol = this.apiUrl.startsWith("https") ? "wss" : "ws";
+    const baseUrl = this.apiUrl
+      .replace(/^https?/, wsProtocol)
+      .replace(/\/+$/, "");
     // Token agora viaja no header Authorization — nunca em query string.
     const url = `${baseUrl}/v1/ws/print-agent`;
 
-    this.setState('connecting');
+    this.setState("connecting");
     log.info(`[WS] Connecting to ${url}`);
 
     try {
@@ -198,31 +274,35 @@ export class PrintServerWSClient extends EventEmitter {
         handshakeTimeout: 15000,
       });
     } catch (err) {
-      log.error('[WS] Failed to create WebSocket:', err);
+      log.error("[WS] Failed to create WebSocket:", err);
       this.scheduleReconnect();
       return;
     }
 
-    this.ws.on('open', () => {
-      log.info('[WS] Connected');
-      this.setState('connected');
+    this.ws.on("open", () => {
+      log.info("[WS] Connected");
+      this.setState("connected");
       this.reconnectDelay = INITIAL_RECONNECT_DELAY;
-      this.send({ type: 'hello', protocolVersion: PROTOCOL_VERSION, clientVersion: CLIENT_VERSION });
-      this.send({ type: 'status', status: 'ONLINE' });
+      this.send({
+        type: "hello",
+        protocolVersion: PROTOCOL_VERSION,
+        clientVersion: CLIENT_VERSION,
+      });
+      this.send({ type: "status", status: "ONLINE" });
       this.startHeartbeat();
     });
 
-    this.ws.on('message', (raw: WebSocket.Data, isBinary: boolean) => {
+    this.ws.on("message", (raw: WebSocket.Data, isBinary: boolean) => {
       if (isBinary) {
-        log.warn('[WS] Mensagem binária recebida ignorada');
+        log.warn("[WS] Mensagem binária recebida ignorada");
         return;
       }
 
       let text: string;
       try {
-        text = raw.toString('utf-8');
+        text = raw.toString("utf-8");
       } catch {
-        log.warn('[WS] Falha ao converter mensagem para UTF-8');
+        log.warn("[WS] Falha ao converter mensagem para UTF-8");
         return;
       }
 
@@ -235,41 +315,62 @@ export class PrintServerWSClient extends EventEmitter {
       try {
         parsed = JSON.parse(text);
       } catch (err) {
-        log.error('[WS] JSON inválido:', err);
+        log.error("[WS] JSON inválido:", err);
         return;
       }
 
       if (!isValidIncomingMessage(parsed)) {
-        log.warn('[WS] Mensagem com schema inválido descartada:', (parsed as { type?: unknown })?.type);
+        log.warn(
+          "[WS] Mensagem com schema inválido descartada:",
+          (parsed as { type?: unknown })?.type,
+        );
         return;
       }
 
       log.info(
-        `[WS] Received: ${parsed.type}${parsed.type === 'print' ? ` (job ${parsed.jobId})` : ''}`,
+        `[WS] Received: ${parsed.type}${parsed.type === "print" ? ` (job ${parsed.jobId})` : ""}`,
       );
-      this.messageHandler?.(parsed);
+
+      // Shared satellite messages route to typed events so callers can
+      // subscribe by concern (`release`, `revoked`, `welcome`) without
+      // every print-specific handler having to switch on `type` first.
+      // Print-specific messages still flow through `messageHandler` for
+      // back-compat with the existing main.ts dispatcher.
+      switch (parsed.type) {
+        case "welcome":
+          this.emit("welcome", parsed);
+          break;
+        case "app.release.published":
+          this.emit("release", parsed);
+          break;
+        case "device.revoked":
+          this.emit("revoked", parsed);
+          break;
+        default:
+          this.messageHandler?.(parsed);
+      }
     });
 
-    this.ws.on('pong', () => {
+    this.ws.on("pong", () => {
       if (this.pongTimer) {
         clearTimeout(this.pongTimer);
         this.pongTimer = null;
       }
     });
 
-    this.ws.on('close', (code: number, reason: Buffer) => {
+    this.ws.on("close", (code: number, reason: Buffer) => {
       log.info(`[WS] Closed — code=${code} reason=${reason.toString()}`);
       this.stopHeartbeat();
       this.ws = null;
 
       if (!this.intentionalDisconnect) {
-        this.setState('disconnected');
+        this.setState("disconnected");
         this.scheduleReconnect();
       }
     });
 
-    this.ws.on('error', (err: Error) => {
-      log.error('[WS] Error:', err.message);
+    this.ws.on("error", (err: Error) => {
+      log.error("[WS] Error:", err.message);
     });
   }
 
@@ -281,14 +382,16 @@ export class PrintServerWSClient extends EventEmitter {
       try {
         this.ws.ping();
       } catch (err) {
-        log.error('[WS] Falha ao enviar ping:', err);
+        log.error("[WS] Falha ao enviar ping:", err);
         return;
       }
 
       // Se não receber pong dentro de PONG_TIMEOUT, força reconexão
       if (this.pongTimer) clearTimeout(this.pongTimer);
       this.pongTimer = setTimeout(() => {
-        log.warn(`[WS] Sem resposta de pong em ${PONG_TIMEOUT}ms — forçando reconexão`);
+        log.warn(
+          `[WS] Sem resposta de pong em ${PONG_TIMEOUT}ms — forçando reconexão`,
+        );
         this.forceReconnect();
       }, PONG_TIMEOUT);
     }, HEARTBEAT_INTERVAL);
@@ -308,7 +411,7 @@ export class PrintServerWSClient extends EventEmitter {
   private forceReconnect(): void {
     if (this.intentionalDisconnect) return;
     this.teardownSocket();
-    this.setState('disconnected');
+    this.setState("disconnected");
     this.scheduleReconnect();
   }
 
@@ -323,7 +426,10 @@ export class PrintServerWSClient extends EventEmitter {
       this.doConnect();
     }, this.reconnectDelay);
 
-    this.reconnectDelay = Math.min(this.reconnectDelay * 2, MAX_RECONNECT_DELAY);
+    this.reconnectDelay = Math.min(
+      this.reconnectDelay * 2,
+      MAX_RECONNECT_DELAY,
+    );
   }
 
   private clearTimers(): void {
