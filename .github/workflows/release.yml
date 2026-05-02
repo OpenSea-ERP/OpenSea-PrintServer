@@ -59,7 +59,13 @@ jobs:
         # secret estiver presente, falha o release se o binário não estiver
         # assinado (proteção anti-acidente). Quando ausente, o release segue
         # unsigned — política SAT-CI-01-rev2 (cert Authenticode é opcional).
-        if: ${{ secrets.WIN_CSC_LINK != '' }}
+        #
+        # GitHub Actions não permite `secrets.*` direto em `if:` (parse error
+        # "Unrecognized named-value: 'secrets'"). Workaround: expor o boolean
+        # via env e referenciar `env.HAS_CERT`.
+        env:
+          HAS_CERT: ${{ secrets.WIN_CSC_LINK != '' }}
+        if: env.HAS_CERT == 'true'
         shell: pwsh
         run: |
           $exeFiles = Get-ChildItem release -Filter "OpenSea-PrintServer-Setup-*.exe" -ErrorAction SilentlyContinue
