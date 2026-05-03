@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef } from "react";
 import {
   Printer,
   RefreshCw,
@@ -6,12 +6,12 @@ import {
   Wifi,
   WifiOff,
   Loader2,
-} from 'lucide-react';
-import { StatusDot } from '../components/StatusDot';
-import { PrintQueueDrawer } from '../components/PrintQueueDrawer';
-import { cn } from '../utils';
-import { useIpc, invokeIpc } from '../hooks/useIpc';
-import type { AgentStatus, PrinterInfo, PrintJob } from '../preload';
+} from "lucide-react";
+import { StatusDot } from "../components/StatusDot";
+import { PrintQueueDrawer } from "../components/PrintQueueDrawer";
+import { cn } from "../utils";
+import { useIpc, invokeIpc } from "../hooks/useIpc";
+import type { AgentStatus, PrinterInfo, PrintJob } from "../preload";
 
 interface DashboardProps {
   status: AgentStatus;
@@ -24,10 +24,13 @@ export function Dashboard({ status, onOpenSettings }: DashboardProps) {
     data: printers,
     loading: printersLoading,
     refetch: refetchPrinters,
-  } = useIpc<PrinterInfo[]>('printers:list');
+  } = useIpc<PrinterInfo[]>("printers:list");
 
   const [refreshing, setRefreshing] = useState(false);
-  const [drawerPrinter, setDrawerPrinter] = useState<{ name: string; status: number } | null>(null);
+  const [drawerPrinter, setDrawerPrinter] = useState<{
+    name: string;
+    status: number;
+  } | null>(null);
 
   // Job counts per printer (for subtitle)
   const [jobCounts, setJobCounts] = useState<Record<string, number>>({});
@@ -40,7 +43,7 @@ export function Dashboard({ status, onOpenSettings }: DashboardProps) {
         .filter((p) => p.status === 0) // only online
         .map(async (p) => {
           try {
-            const jobs = await invokeIpc<PrintJob[]>('printers:jobs', p.name);
+            const jobs = await invokeIpc<PrintJob[]>("printers:jobs", p.name);
             counts[p.name] = jobs?.length ?? 0;
           } catch {
             counts[p.name] = 0;
@@ -87,7 +90,7 @@ export function Dashboard({ status, onOpenSettings }: DashboardProps) {
                 OpenSea Print Server
               </h1>
               <p className="text-xs text-slate-500 mt-0.5">
-                {status.computerName || 'Computador'}
+                {status.computerName || "Computador"}
               </p>
             </div>
           </div>
@@ -108,12 +111,12 @@ export function Dashboard({ status, onOpenSettings }: DashboardProps) {
             </button>
             <div
               className={cn(
-                'h-9 w-9 flex items-center justify-center rounded-lg border',
+                "h-9 w-9 flex items-center justify-center rounded-lg border",
                 status.connected
-                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                  : 'bg-slate-800/60 border-slate-700/50 text-slate-500',
+                  ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                  : "bg-slate-800/60 border-slate-700/50 text-slate-500",
               )}
-              title={status.connected ? 'Conectado' : 'Desconectado'}
+              title={status.connected ? "Conectado" : "Desconectado"}
             >
               {status.connected ? (
                 <Wifi className="h-4 w-4" />
@@ -127,14 +130,14 @@ export function Dashboard({ status, onOpenSettings }: DashboardProps) {
         {/* Divider between app header and list header */}
         <div className="h-px bg-slate-800 -mx-5 mt-3" />
 
-        {/* Sub-header: detected printers count + verify button — aligned bottom */}
-        <div className="flex items-end justify-between mt-3 pb-0">
+        {/* Sub-header: detected printers count + verify button — aligned center */}
+        <div className="flex items-center justify-between mt-3 pb-0">
           <div className="flex items-center gap-2">
-            <h2 className="text-sm font-semibold text-slate-200">
+            <h2 className="text-sm font-semibold text-slate-200 leading-none">
               Impressoras Detectadas
             </h2>
             {!printersLoading && (
-              <span className="inline-flex items-center justify-center h-5 min-w-5 px-1.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 text-xs font-bold">
+              <span className="inline-flex items-center justify-center h-5 min-w-5 px-1.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 text-xs font-bold leading-none">
                 {printerList.length}
               </span>
             )}
@@ -152,7 +155,9 @@ export function Dashboard({ status, onOpenSettings }: DashboardProps) {
             "
             title="Atualizar lista"
           >
-            <RefreshCw className={cn('h-3.5 w-3.5', refreshing && 'animate-spin')} />
+            <RefreshCw
+              className={cn("h-3.5 w-3.5", refreshing && "animate-spin")}
+            />
           </button>
         </div>
       </div>
@@ -166,7 +171,9 @@ export function Dashboard({ status, onOpenSettings }: DashboardProps) {
         ) : printerList.length === 0 ? (
           <div className="bg-slate-800/60 rounded-xl border border-slate-700/50 p-8 text-center">
             <Printer className="h-8 w-8 text-slate-600 mx-auto mb-2" />
-            <p className="text-sm text-slate-400">Nenhuma impressora detectada</p>
+            <p className="text-sm text-slate-400">
+              Nenhuma impressora detectada
+            </p>
             <p className="text-xs text-slate-600 mt-1">
               Verifique se as impressoras estão instaladas no sistema
             </p>
@@ -177,12 +184,12 @@ export function Dashboard({ status, onOpenSettings }: DashboardProps) {
               const isOnline = printer.status === 0;
               const count = jobCounts[printer.name];
               const subtitle = !isOnline
-                ? 'Offline'
+                ? "Offline"
                 : count === undefined
-                  ? 'Verificando fila...'
+                  ? "Verificando fila..."
                   : count === 0
-                    ? 'Fila vazia'
-                    : `${count} documento${count !== 1 ? 's' : ''} na fila`;
+                    ? "Fila vazia"
+                    : `${count} documento${count !== 1 ? "s" : ""} na fila`;
 
               return (
                 <div
@@ -191,16 +198,20 @@ export function Dashboard({ status, onOpenSettings }: DashboardProps) {
                   onClick={() => handlePrinterClick(printer)}
                   title="Clique para ver a fila de impressão"
                 >
-                  <div className={cn(
-                    'h-9 w-9 rounded-lg flex items-center justify-center flex-shrink-0',
-                    isOnline
-                      ? 'bg-blue-500/10 border border-blue-500/20'
-                      : 'bg-slate-700/50 border border-slate-600/30',
-                  )}>
-                    <Printer className={cn(
-                      'h-4 w-4',
-                      isOnline ? 'text-blue-400' : 'text-slate-500',
-                    )} />
+                  <div
+                    className={cn(
+                      "h-9 w-9 rounded-lg flex items-center justify-center flex-shrink-0",
+                      isOnline
+                        ? "bg-blue-500/10 border border-blue-500/20"
+                        : "bg-slate-700/50 border border-slate-600/30",
+                    )}
+                  >
+                    <Printer
+                      className={cn(
+                        "h-4 w-4",
+                        isOnline ? "text-blue-400" : "text-slate-500",
+                      )}
+                    />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
@@ -213,16 +224,29 @@ export function Dashboard({ status, onOpenSettings }: DashboardProps) {
                         </span>
                       )}
                     </div>
-                    <p className={cn(
-                      'text-xs mt-0.5',
-                      !isOnline ? 'text-slate-600' :
-                        count && count > 0 ? 'text-amber-400/70' : 'text-slate-500',
-                    )}>
+                    <p
+                      className={cn(
+                        "text-xs mt-0.5",
+                        !isOnline
+                          ? "text-slate-600"
+                          : count && count > 0
+                            ? "text-amber-400/70"
+                            : "text-slate-500",
+                      )}
+                    >
                       {subtitle}
                     </p>
                   </div>
                   <StatusDot
-                    status={isOnline ? 'online' : printer.status === 2 ? 'error' : printer.status === 1 ? 'offline' : 'warning'}
+                    status={
+                      isOnline
+                        ? "online"
+                        : printer.status === 2
+                          ? "error"
+                          : printer.status === 1
+                            ? "offline"
+                            : "warning"
+                    }
                     size="sm"
                     pulse={isOnline}
                   />
@@ -235,7 +259,7 @@ export function Dashboard({ status, onOpenSettings }: DashboardProps) {
 
       {/* ── Print Queue Drawer ──────────────────────────────────────────── */}
       <PrintQueueDrawer
-        printerName={drawerPrinter?.name ?? ''}
+        printerName={drawerPrinter?.name ?? ""}
         printerStatus={drawerPrinter?.status ?? 3}
         open={drawerPrinter !== null}
         onClose={() => setDrawerPrinter(null)}
