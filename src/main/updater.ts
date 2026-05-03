@@ -35,6 +35,23 @@ function sendStatusToRenderer(channel: string, data?: unknown): void {
 }
 
 function setupUpdater(): void {
+  // Idempotência: limpar timers e listeners de uma chamada anterior antes de
+  // re-registrar — defende contra double-init em test setup ou rebind.
+  if (retryTimer) {
+    clearTimeout(retryTimer);
+    retryTimer = null;
+  }
+  if (checkInterval) {
+    clearInterval(checkInterval);
+    checkInterval = null;
+  }
+  autoUpdater.removeAllListeners("checking-for-update");
+  autoUpdater.removeAllListeners("update-available");
+  autoUpdater.removeAllListeners("update-not-available");
+  autoUpdater.removeAllListeners("download-progress");
+  autoUpdater.removeAllListeners("update-downloaded");
+  autoUpdater.removeAllListeners("error");
+
   autoUpdater.on("checking-for-update", () => {
     log.info("[updater] Verificando atualizações...");
     sendStatusToRenderer("updater:status", { status: "checking" });
