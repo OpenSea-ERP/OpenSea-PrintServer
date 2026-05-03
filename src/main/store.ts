@@ -12,6 +12,8 @@ interface StoreSchema {
   autoLaunch: boolean;
   minimizeToTray: boolean;
   pendingUpdateVersion: string | null;
+  /** Timestamp ms do último update que falhou — usado pelo retry 24h. */
+  lastFailedUpdateAt: number | null;
 }
 
 /**
@@ -33,6 +35,7 @@ const schema = {
   autoLaunch: { type: "boolean", default: true },
   minimizeToTray: { type: "boolean", default: true },
   pendingUpdateVersion: { type: ["string", "null"], default: null },
+  lastFailedUpdateAt: { type: ["number", "null"], default: null },
 } as const;
 
 /**
