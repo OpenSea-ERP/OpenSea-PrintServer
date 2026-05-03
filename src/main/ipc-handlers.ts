@@ -5,7 +5,10 @@ import {
   toggleAutoLaunch,
 } from "@opensea/satellite-runtime/auto-launch";
 import { store, StoreSchema } from "./store";
-import { checkForUpdates, quitAndInstall } from "./updater";
+import {
+  checkForUpdates,
+  quitAndInstall,
+} from "@opensea/satellite-runtime/updater";
 import { connectWebSocket, disconnectWebSocket } from "./main";
 import { isConnected } from "./connection-state";
 import { setDeviceToken, deleteDeviceToken } from "./secure-store";

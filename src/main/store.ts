@@ -41,9 +41,17 @@ const schema = z.object({
    */
   autoLaunchBridged: z.boolean().optional(),
   minimizeToTray: z.boolean(),
+  /** @deprecated — preserved for migration; runtime updater is canonical now. */
   pendingUpdateVersion: z.string().nullable(),
-  /** Timestamp ms do último update que falhou — usado pelo retry 24h. */
+  /** @deprecated — preserved for migration; runtime updater is canonical now. */
   lastFailedUpdateAt: z.number().nullable(),
+  /**
+   * One-shot flag set the first time `bridgeUpdaterState()` runs in
+   * `main.ts`, copying legacy `pendingUpdateVersion`/`lastFailedUpdateAt`
+   * into the satellite-runtime updater preference store. Optional so
+   * existing stores parse without a forced reset (Spec amendment B-A2).
+   */
+  updaterBridged: z.boolean().optional(),
 });
 
 export type StoreSchema = z.infer<typeof schema>;
@@ -58,6 +66,7 @@ export const store = createStore({
     pairingCode: null,
     autoLaunch: true,
     autoLaunchBridged: false,
+    updaterBridged: false,
     minimizeToTray: true,
     pendingUpdateVersion: null,
     lastFailedUpdateAt: null,

@@ -22,7 +22,8 @@ import {
   setupUpdater,
   checkForUpdates,
   recordAnnouncedRelease,
-} from "./updater";
+  primeUpdaterStore,
+} from "@opensea/satellite-runtime/updater";
 import { store, migrateStaleApiUrl } from "./store";
 import { PrintServerWSClient } from "./ws-client";
 import { setConnected } from "./connection-state";
@@ -266,6 +267,36 @@ async function bridgeAutoLaunchPreference(): Promise<void> {
   }
 }
 
+/**
+ * Reconcile legacy `store.{pendingUpdateVersion, lastFailedUpdateAt}`
+ * (PrintServer 1.6.x stored these in its own `config` electron-store) with
+ * the runtime's `updater.preferences` store. Runs once per install.
+ *
+ * Uses `primeUpdaterStore` which is idempotent — only writes a key if the
+ * runtime store still holds the schema default (null). Subsequent boots
+ * skip via the `updaterBridged` flag.
+ *
+ * Synchronous because primeUpdaterStore + store reads are sync (electron-store
+ * is sync). Failure is non-fatal: even without the bridge, the runtime
+ * still works; user just loses pre-migration pending notifications. (Spec
+ * amendment B-A2.)
+ */
+function bridgeUpdaterState(): void {
+  if (store.get("updaterBridged")) return;
+  const legacyPending = store.get("pendingUpdateVersion");
+  const legacyFailed = store.get("lastFailedUpdateAt");
+  if (legacyPending !== null || legacyFailed !== null) {
+    log.info(
+      `[main] Bridging legacy updater state (pending=${legacyPending}, failedAt=${legacyFailed}) into runtime`,
+    );
+    primeUpdaterStore({
+      pendingUpdateVersion: legacyPending,
+      lastFailedUpdateAt: legacyFailed,
+    });
+  }
+  store.set("updaterBridged", true);
+}
+
 function createWindow(): BrowserWindow {
   mainWindow = new BrowserWindow({
     width: 440,
@@ -391,7 +422,17 @@ app.on("ready", async () => {
   Menu.setApplicationMenu(null);
 
   registerIpcHandlers();
-  setupUpdater();
+  // Bridge legacy updater state from PrintServer's `config` store to the
+  // runtime's `updater.preferences` store BEFORE setupUpdater so the
+  // pending-update re-emit on first boot post-migration uses the seeded
+  // value (Spec amendment B-A2).
+  bridgeUpdaterState();
+  setupUpdater({
+    // PrintServer's NSIS has not been audited for silent install; preserve
+    // pre-migration behavior `(false, true)` until that audit is done
+    // (Spec amendment B-A3). Default would be `(true, true)`.
+    quitAndInstallFlags: { silent: false, forceRunAfter: true },
+  });
 
   createWindow();
   createTray();
