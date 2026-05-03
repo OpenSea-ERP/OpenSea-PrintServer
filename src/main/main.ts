@@ -1,21 +1,23 @@
-import {
-  app,
-  BrowserWindow,
-  Tray,
-  Menu,
-  nativeImage,
-  Notification,
-  dialog,
-} from "electron";
+import { app, BrowserWindow, Menu, Notification } from "electron";
 import path from "path";
-import log from "electron-log";
+import { setupLog, getLogger } from "@opensea/satellite-runtime/log";
+import { ensureSingleInstance } from "@opensea/satellite-runtime/single-instance";
+import { setupAutoLaunch } from "@opensea/satellite-runtime/auto-launch";
+import { restoreWindowState } from "@opensea/satellite-runtime/window-state";
+import {
+  createSatelliteTray,
+  type SatelliteTrayHandle,
+} from "@opensea/satellite-runtime/tray";
+import {
+  registerShutdownHandler,
+  runShutdownHandlers,
+} from "@opensea/satellite-runtime/graceful-shutdown";
 import { registerIpcHandlers } from "./ipc-handlers";
 import {
   setupUpdater,
   checkForUpdates,
   recordAnnouncedRelease,
 } from "./updater";
-import { setup as setupAutoLaunch } from "./auto-launch";
 import { store, migrateStaleApiUrl } from "./store";
 import { PrintServerWSClient } from "./ws-client";
 import { setConnected } from "./connection-state";
@@ -23,12 +25,11 @@ import { getDeviceToken } from "./secure-store";
 import { executePrint } from "./print-handler";
 import { detectorToBackend } from "./printer-status";
 
-log.transports.file.level = "info";
-log.transports.console.level = "debug";
-log.transports.file.maxSize = 10 * 1024 * 1024; // 10MB rotation
+setupLog({ scope: "print-server" });
+const log = getLogger("main");
 
 let mainWindow: BrowserWindow | null = null;
-let tray: Tray | null = null;
+let trayHandle: SatelliteTrayHandle | null = null;
 let isQuitting = false;
 const wsClient = new PrintServerWSClient();
 
@@ -117,11 +118,6 @@ wsClient.on(
     log.info(
       `[ws] Release ${msg.version} anunciada via WS — disparando updater`,
     );
-    // Persist the announcement (downloadUrl + sha256) so the updater
-    // can cross-check the version it actually finds and downloads. We
-    // do not fetch from `downloadUrl` directly — electron-updater owns
-    // the channel — but recording it gives operators a clear paper
-    // trail in the logs when something diverges.
     recordAnnouncedRelease({
       version: msg.version,
       downloadUrl: msg.downloadUrl,
@@ -133,11 +129,7 @@ wsClient.on(
   },
 );
 
-// Satellite Contract v1: backend revoked our pairing (admin clicked
-// "Unpair" or a security action force-revoked the device). The socket
-// will close with 4003 right after this message; we proactively notify
-// the renderer so the pair page replaces the dashboard immediately
-// instead of waiting for the next reconnect attempt to fail visibly.
+// Satellite Contract v1: backend revoked our pairing.
 wsClient.on("revoked", (msg: { reason: string }) => {
   log.warn(`[ws] device.revoked recebido (reason=${msg.reason})`);
   sendToRenderer("device:revoked", { reason: msg.reason });
@@ -251,6 +243,10 @@ function createWindow(): BrowserWindow {
     },
   });
 
+  // Persist size/position via runtime window-state. Defaults match the
+  // hard-coded baseline above so first-run layout is unchanged.
+  restoreWindowState(mainWindow, "main-window", { width: 440, height: 780 });
+
   const rendererPath = path.join(__dirname, "..", "renderer", "index.html");
   mainWindow.loadFile(rendererPath);
 
@@ -274,70 +270,56 @@ function createWindow(): BrowserWindow {
   return mainWindow;
 }
 
-function createTray(): void {
-  const iconPath = getAssetPath("icon.png");
-  let trayIcon: Electron.NativeImage;
-
-  try {
-    trayIcon = nativeImage.createFromPath(iconPath);
-    if (trayIcon.isEmpty()) {
-      trayIcon = nativeImage.createEmpty();
-    }
-  } catch {
-    trayIcon = nativeImage.createEmpty();
-  }
-
-  tray = new Tray(trayIcon);
-  tray.setToolTip("OpenSea Print Server");
-
-  updateTrayMenu(false);
-
-  tray.on("double-click", () => {
-    showMainWindow();
-  });
-
-  log.info("[main] Ícone na bandeja criado");
-}
-
-function updateTrayMenu(isOnline: boolean): void {
-  if (!tray) return;
-
+function buildTrayCustomItems(
+  isOnline: boolean,
+): Electron.MenuItemConstructorOptions[] {
   const statusLabel = isOnline ? "Status: Online" : "Status: Offline";
-
-  const contextMenu = Menu.buildFromTemplate([
-    {
-      label: "Abrir",
-      click: () => {
-        showMainWindow();
-      },
-    },
+  return [
+    { label: "Abrir", click: () => showMainWindow() },
     { type: "separator" },
-    {
-      label: statusLabel,
-      enabled: false,
-    },
-    {
-      label: `Versão ${app.getVersion()}`,
-      enabled: false,
-    },
+    { label: statusLabel, enabled: false },
+    { label: `Versão ${app.getVersion()}`, enabled: false },
     { type: "separator" },
     {
       label: "Verificar Atualizações",
       click: () => {
-        // Notify renderer this is a manual check (show all states)
         const windows = BrowserWindow.getAllWindows();
         for (const win of windows) {
           if (!win.isDestroyed()) {
             win.webContents.send("updater:manual-check");
           }
         }
-        // Show window so user sees the modal
         showMainWindow();
         checkForUpdates().catch((err) => {
           log.error("[tray] Erro ao verificar atualizações:", err);
         });
       },
     },
+  ];
+}
+
+function createTray(): void {
+  trayHandle = createSatelliteTray({
+    iconPath: getAssetPath("icon.png"),
+    appName: "OpenSea Print Server",
+    onShow: () => showMainWindow(),
+    onQuit: () => {
+      isQuitting = true;
+      app.quit();
+    },
+    customMenuItems: buildTrayCustomItems(false),
+  });
+  log.info("[main] Ícone na bandeja criado");
+}
+
+function updateTrayMenu(isOnline: boolean): void {
+  if (!trayHandle) return;
+  // Rebuild full menu (custom items + default Show/Quit) using runtime layout
+  const custom = buildTrayCustomItems(isOnline);
+  trayHandle.updateMenu([
+    ...custom,
+    { type: "separator" },
+    { label: "Mostrar OpenSea Print Server", click: () => showMainWindow() },
     { type: "separator" },
     {
       label: "Sair",
@@ -347,90 +329,90 @@ function updateTrayMenu(isOnline: boolean): void {
       },
     },
   ]);
-
-  tray.setContextMenu(contextMenu);
 }
 
 // ── App lifecycle ────────────────────────────────────────────────────────
 
-const gotTheLock = app.requestSingleInstanceLock();
-
-if (!gotTheLock) {
-  log.info("[main] Outra instância já está rodando, encerrando");
-  try {
-    dialog.showErrorBox(
-      "OpenSea Print Server",
-      "Já existe uma instância em execução. Abra o ícone na bandeja do sistema.",
-    );
-  } catch {
-    // dialog pode não estar pronto
-  }
-  app.quit();
-} else {
-  app.on("second-instance", () => {
+ensureSingleInstance({
+  onSecondInstance: () => {
     showMainWindow();
+  },
+});
+
+app.on("ready", async () => {
+  log.info("[main] Aplicação pronta");
+
+  // Reescreve apiUrl obsoleto (ex.: localhost herdado de instalações
+  // 1.4.0–1.6.0) antes de qualquer IPC. Sem isso o `agent:pair` falha
+  // com `URL da API inválida` em produção.
+  migrateStaleApiUrl();
+
+  Menu.setApplicationMenu(null);
+
+  registerIpcHandlers();
+  setupUpdater();
+
+  createWindow();
+  createTray();
+
+  await setupAutoLaunch({
+    name: "OpenSea Print Server",
+    isHidden: true,
+  }).catch((err) => {
+    log.error("[main] Erro ao configurar auto-launch:", err);
   });
 
-  app.on("ready", async () => {
-    log.info("[main] Aplicação pronta");
+  // Register shutdown handlers for graceful quit (runtime once-guarded).
+  registerShutdownHandler(
+    async () => {
+      try {
+        wsClient.send({ type: "status", status: "OFFLINE" });
+      } catch {
+        // socket already closed — ignore
+      }
+      disconnectWebSocket();
+    },
+    { name: "ws-disconnect", timeoutMs: 1500 },
+  );
+  registerShutdownHandler(
+    () => {
+      trayHandle?.destroy();
+    },
+    { name: "tray-destroy", timeoutMs: 500 },
+  );
 
-    // Reescreve apiUrl obsoleto (ex.: localhost herdado de instalações
-    // 1.4.0–1.6.0) antes de qualquer IPC. Sem isso o `agent:pair` falha
-    // com `URL da API inválida` em produção.
-    migrateStaleApiUrl();
+  // Connect WebSocket if already paired
+  await connectWebSocket().catch((err) => {
+    log.error("[main] Erro ao conectar WebSocket inicial:", err);
+  });
 
-    Menu.setApplicationMenu(null);
+  await checkForUpdates().catch((err) => {
+    log.error("[main] Erro ao verificar atualizações:", err);
+  });
+});
 
-    registerIpcHandlers();
-    setupUpdater();
+app.on("before-quit", async (event) => {
+  if (isQuitting) return;
+  isQuitting = true;
+  event.preventDefault();
+  log.info("[main] before-quit: rodando shutdown handlers...");
+  await runShutdownHandlers();
+  log.info("[main] Encerrando app");
+  app.exit(0);
+});
 
+app.on("window-all-closed", () => {
+  if (process.platform !== "darwin") {
+    app.quit();
+  }
+});
+
+app.on("activate", () => {
+  if (mainWindow === null) {
     createWindow();
-    createTray();
-
-    await setupAutoLaunch().catch((err) => {
-      log.error("[main] Erro ao configurar auto-launch:", err);
-    });
-
-    // Connect WebSocket if already paired
-    await connectWebSocket().catch((err) => {
-      log.error("[main] Erro ao conectar WebSocket inicial:", err);
-    });
-
-    await checkForUpdates().catch((err) => {
-      log.error("[main] Erro ao verificar atualizações:", err);
-    });
-  });
-
-  app.on("before-quit", (event) => {
-    if (isQuitting) return;
-    isQuitting = true;
-    event.preventDefault();
-    log.info("[main] before-quit: desconectando WebSocket...");
-    try {
-      wsClient.send({ type: "status", status: "OFFLINE" });
-    } catch {
-      // noop
-    }
-    disconnectWebSocket();
-    setTimeout(() => {
-      log.info("[main] Encerrando app após cleanup");
-      app.exit(0);
-    }, 500);
-  });
-
-  app.on("window-all-closed", () => {
-    if (process.platform !== "darwin") {
-      app.quit();
-    }
-  });
-
-  app.on("activate", () => {
-    if (mainWindow === null) {
-      createWindow();
-    } else {
-      showMainWindow();
-    }
-  });
-}
+  } else {
+    showMainWindow();
+  }
+});
 
 export { updateTrayMenu, connectWebSocket, disconnectWebSocket };
