@@ -245,9 +245,8 @@ export class PrintServerWSClient extends EventEmitter {
   }
 
   send(message: OutgoingMessage): boolean {
-    if (!this.inner || !this.inner.isConnected()) return false;
-    this.inner.send(message);
-    return true;
+    if (!this.inner) return false;
+    return this.inner.send(message);
   }
 
   private setState(state: ConnectionState): void {
