@@ -10,7 +10,11 @@ import {
 import path from "path";
 import log from "electron-log";
 import { registerIpcHandlers } from "./ipc-handlers";
-import { setupUpdater, checkForUpdates } from "./updater";
+import {
+  setupUpdater,
+  checkForUpdates,
+  recordAnnouncedRelease,
+} from "./updater";
 import { setup as setupAutoLaunch } from "./auto-launch";
 import { store, migrateStaleApiUrl } from "./store";
 import { PrintServerWSClient } from "./ws-client";
@@ -79,9 +83,13 @@ wsClient.onMessage((message) => {
   }
 
   if (message.type === "print") {
+    // Prefer the new `printerName` field; fall back to the legacy
+    // `printerId` whose value carries the OS device name (transitional —
+    // see ws-client.ts for the full migration story).
+    const printerName = message.printerName ?? message.printerId;
     void handlePrintCommand(
       message.jobId,
-      message.printerId,
+      printerName,
       message.data,
       message.copies,
     );
@@ -94,16 +102,36 @@ wsClient.onMessage((message) => {
 // update. Releases for OTHER satellite kinds (EMPORION, HORUS) are
 // ignored — the validator already accepts every kind, the filter belongs
 // at the consumer.
-wsClient.on("release", (msg: { kind: string; version: string }) => {
-  if (msg.kind !== "PRINT_SERVER") {
-    log.debug(`[ws] Ignorando release para kind=${msg.kind}`);
-    return;
-  }
-  log.info(`[ws] Release ${msg.version} anunciada via WS — disparando updater`);
-  checkForUpdates().catch((err) => {
-    log.error("[ws] checkForUpdates após release.published falhou:", err);
-  });
-});
+wsClient.on(
+  "release",
+  (msg: {
+    kind: string;
+    version: string;
+    downloadUrl: string;
+    sha256: string;
+  }) => {
+    if (msg.kind !== "PRINT_SERVER") {
+      log.debug(`[ws] Ignorando release para kind=${msg.kind}`);
+      return;
+    }
+    log.info(
+      `[ws] Release ${msg.version} anunciada via WS — disparando updater`,
+    );
+    // Persist the announcement (downloadUrl + sha256) so the updater
+    // can cross-check the version it actually finds and downloads. We
+    // do not fetch from `downloadUrl` directly — electron-updater owns
+    // the channel — but recording it gives operators a clear paper
+    // trail in the logs when something diverges.
+    recordAnnouncedRelease({
+      version: msg.version,
+      downloadUrl: msg.downloadUrl,
+      sha256: msg.sha256,
+    });
+    checkForUpdates().catch((err) => {
+      log.error("[ws] checkForUpdates após release.published falhou:", err);
+    });
+  },
+);
 
 // Satellite Contract v1: backend revoked our pairing (admin clicked
 // "Unpair" or a security action force-revoked the device). The socket
@@ -121,6 +149,7 @@ async function handlePrintCommand(
   dataBase64: string,
   copies: number,
 ): Promise<void> {
+  const startedAt = Date.now();
   let buffer: Buffer;
   try {
     buffer = Buffer.from(dataBase64, "base64");
@@ -132,18 +161,24 @@ async function handlePrintCommand(
       jobId,
       success: false,
       error: "base64 inválido",
+      durationMs: Date.now() - startedAt,
     });
     return;
   }
 
   const result = await executePrint(jobId, printerName, buffer, copies);
+  const durationMs = Date.now() - startedAt;
   wsClient.send({
     type: "print-result",
     jobId,
     success: result.success,
     error: result.error,
+    durationMs,
   });
 
+  log.info(
+    `[main] Job ${jobId}: concluído em ${durationMs}ms (success=${result.success})`,
+  );
   notifyPrintResult(jobId, printerName, result.success, result.error);
 }
 

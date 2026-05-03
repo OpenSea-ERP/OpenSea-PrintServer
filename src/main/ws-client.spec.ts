@@ -3,7 +3,7 @@ import { isValidIncomingMessage } from "./ws-client";
 
 describe("isValidIncomingMessage", () => {
   describe("print-specific messages", () => {
-    it("accepts a well-formed print command", () => {
+    it("accepts a well-formed print command using the legacy printerId", () => {
       expect(
         isValidIncomingMessage({
           type: "print",
@@ -13,6 +13,42 @@ describe("isValidIncomingMessage", () => {
           copies: 1,
         }),
       ).toBe(true);
+    });
+
+    it("accepts a print command using the new printerName field", () => {
+      expect(
+        isValidIncomingMessage({
+          type: "print",
+          jobId: "j-2",
+          printerName: "EPSON-TM-T20",
+          data: "AQID",
+          copies: 1,
+        }),
+      ).toBe(true);
+    });
+
+    it("accepts a print command carrying both printerName and printerId", () => {
+      expect(
+        isValidIncomingMessage({
+          type: "print",
+          jobId: "j-3",
+          printerName: "EPSON-TM-T20",
+          printerId: "EPSON-TM-T20",
+          data: "AQID",
+          copies: 1,
+        }),
+      ).toBe(true);
+    });
+
+    it("rejects a print command missing both printerName and printerId", () => {
+      expect(
+        isValidIncomingMessage({
+          type: "print",
+          jobId: "j-4",
+          data: "AQID",
+          copies: 1,
+        }),
+      ).toBe(false);
     });
 
     it("accepts request-printers", () => {

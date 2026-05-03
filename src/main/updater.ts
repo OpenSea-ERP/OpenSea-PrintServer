@@ -25,6 +25,43 @@ export const CHECK_INTERVAL_6H = 6 * 60 * 60 * 1000;
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
 let checkInterval: ReturnType<typeof setInterval> | null = null;
 
+/**
+ * Last release announced over the WebSocket via the Satellite Contract
+ * `app.release.published` event. We keep the announcement so the updater
+ * lifecycle handlers can cross-check the version that electron-updater
+ * actually downloaded against what the backend said it published — a
+ * mismatch usually means the update channel and the broadcast are out
+ * of sync, which is worth a loud log line in production.
+ *
+ * `sha256` is informational here: electron-updater already validates the
+ * artefact against the sha512 in `latest.yml`. We log the announced
+ * sha256 so an operator can compare manually if a tamper is ever
+ * suspected.
+ */
+interface AnnouncedRelease {
+  version: string;
+  downloadUrl: string;
+  sha256: string;
+  announcedAt: number;
+}
+let announcedRelease: AnnouncedRelease | null = null;
+
+/**
+ * Record a release announcement received over the satellite WebSocket.
+ * Called from main.ts when `app.release.published` for kind=PRINT_SERVER
+ * arrives.
+ */
+export function recordAnnouncedRelease(release: {
+  version: string;
+  downloadUrl: string;
+  sha256: string;
+}): void {
+  announcedRelease = { ...release, announcedAt: Date.now() };
+  log.info(
+    `[updater] Release ${release.version} anunciada via WS — url=${release.downloadUrl} sha256=${release.sha256.slice(0, 16)}…`,
+  );
+}
+
 function sendStatusToRenderer(channel: string, data?: unknown): void {
   const windows = BrowserWindow.getAllWindows();
   for (const win of windows) {
@@ -59,6 +96,11 @@ function setupUpdater(): void {
 
   autoUpdater.on("update-available", (info) => {
     log.info("[updater] Atualização disponível:", info.version);
+    if (announcedRelease && announcedRelease.version !== info.version) {
+      log.warn(
+        `[updater] Versão divergente: backend anunciou ${announcedRelease.version} via WS, electron-updater encontrou ${info.version}. Channel e release broadcast podem estar dessincronizados.`,
+      );
+    }
     sendStatusToRenderer("updater:status", {
       status: "available",
       version: info.version,
@@ -80,6 +122,22 @@ function setupUpdater(): void {
 
   autoUpdater.on("update-downloaded", (info) => {
     log.info("[updater] Atualização baixada:", info.version);
+    // electron-updater already validates the artefact against the
+    // sha512 declared in `latest.yml`. The Satellite Contract carries
+    // an additional sha256 we logged on announcement — surface it here
+    // alongside the downloaded version so an operator can correlate
+    // both hashes if a tamper is ever suspected.
+    if (announcedRelease) {
+      if (announcedRelease.version === info.version) {
+        log.info(
+          `[updater] Download bateu com release anunciada (v${info.version}, sha256 anunciado=${announcedRelease.sha256.slice(0, 16)}…)`,
+        );
+      } else {
+        log.warn(
+          `[updater] Download v${info.version} NÃO bate com release anunciada v${announcedRelease.version}. Investigar antes de instalar.`,
+        );
+      }
+    }
     // Persistir para que o renderer ainda veja o estado após reabrir o app
     store.set("pendingUpdateVersion", info.version);
     sendStatusToRenderer("updater:status", {

@@ -14,6 +14,20 @@ export type ConnectionState = "disconnected" | "connecting" | "connected";
 export interface PrintCommand {
   type: "print";
   jobId: string;
+  /**
+   * OS-level printer name as reported during pairing (Win32_Printer.Name
+   * on Windows, CUPS queue name on Unix). Preferred field — added in
+   * PrintServer v1.7 + API contract revision 2026-05-02. Older API
+   * builds still send `printerId` carrying the OS name as a transitional
+   * alias; the consumer reads `printerName ?? printerId`.
+   */
+  printerName?: string;
+  /**
+   * Legacy alias kept for back-compat with API builds that have not yet
+   * been redeployed with the contract rename. Will be removed once the
+   * PrintServer fleet is fully on the new contract AND the API only
+   * emits `printerName`.
+   */
   printerId: string;
   data: string; // base64-encoded
   copies: number;
@@ -58,6 +72,12 @@ export interface PrintResultMessage {
   jobId: string;
   success: boolean;
   error?: string;
+  /**
+   * Telemetry — milliseconds the local print pipeline took (received →
+   * print-result emitted). The backend persists it on `print_jobs` so
+   * operators can graph slow devices without scraping logs.
+   */
+  durationMs?: number;
 }
 
 export interface PrintersMessage {
@@ -118,13 +138,22 @@ function isValidPrintMessage(raw: unknown): raw is PrintIncomingMessage {
 
   if (msg.type === "print") {
     const m = raw as Record<string, unknown>;
+    // Accept either `printerName` (preferred, contract revision
+    // 2026-05-02) or the legacy `printerId` field whose value is also an
+    // OS device name. At least one must be a non-empty string.
+    const hasPrinterName =
+      typeof m.printerName === "string" &&
+      m.printerName.length > 0 &&
+      m.printerName.length <= 256;
+    const hasPrinterId =
+      typeof m.printerId === "string" &&
+      m.printerId.length > 0 &&
+      m.printerId.length <= 256;
     return (
       typeof m.jobId === "string" &&
       m.jobId.length > 0 &&
       m.jobId.length <= 128 &&
-      typeof m.printerId === "string" &&
-      m.printerId.length > 0 &&
-      m.printerId.length <= 256 &&
+      (hasPrinterName || hasPrinterId) &&
       typeof m.data === "string" &&
       m.data.length > 0 &&
       m.data.length <= MAX_PAYLOAD &&
@@ -378,6 +407,14 @@ export class PrintServerWSClient extends EventEmitter {
     this.stopHeartbeat();
     this.heartbeatTimer = setInterval(() => {
       if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+
+      // Application-level heartbeat: the API's `heartbeat-checker` only
+      // refreshes `print_agents.lastSeenAt` when it sees the JSON
+      // `{type:'heartbeat'}` (or a fresh `status` message). A bare WS
+      // ping frame keeps the TCP socket alive but does NOT update the
+      // DB column, so without this the agent gets marked OFFLINE after
+      // 90s even though the connection is healthy.
+      this.send({ type: "heartbeat" });
 
       try {
         this.ws.ping();

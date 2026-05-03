@@ -59,6 +59,26 @@ export function App() {
     }, []),
   );
 
+  // Satellite Contract v1: backend told us the pairing was killed
+  // (admin clicked "Unpair", security force-revoked, etc). The socket
+  // is about to close with 4003 — we proactively (a) clear the local
+  // device token + agent metadata via `agent:unpair` so the next
+  // launch starts clean, and (b) flip back to the empty/pair view so
+  // the user does not stare at a stale dashboard while reconnect
+  // attempts loop in the background.
+  useIpcEvent<{ reason: string }>(
+    "device:revoked",
+    useCallback(() => {
+      invokeIpc("agent:unpair").catch(() => {
+        // best-effort — even if cleanup IPC fails the WS reconnect
+        // will be rejected with 4003 and the user will land on the
+        // pair page on next start.
+      });
+      setStatus(null);
+      setView("empty");
+    }, []),
+  );
+
   const checkStatus = useCallback(async () => {
     try {
       const result = await invokeIpc<AgentStatus>("agent:get-status");
