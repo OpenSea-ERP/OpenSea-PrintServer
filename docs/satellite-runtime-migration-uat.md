@@ -77,6 +77,19 @@ dev mode (auto-launch is no-op in dev by design).
 - [ ] Job arrives, prints successfully, ack returns to backend
 - [ ] Tray Notification appears: "Impressão concluída"
 
+### Updater (Sub-projeto B — runtime adoption)
+
+- [ ] On first boot post-migration, log shows `[main] Bridging legacy updater state` if user had `pendingUpdateVersion` or `lastFailedUpdateAt` from 1.6.x. Subsequent boots skip the bridge.
+- [ ] Log shows `[satellite-runtime/updater] initialized` (via electron-updater logger).
+- [ ] Boot check runs, log shows `[satellite-runtime/updater] Verificando atualizações...`.
+- [ ] If a new version is published on GitHub Releases, modal "Atualização disponível" shows.
+- [ ] Download progresses; `[satellite-runtime/updater] Atualização baixada` logged.
+- [ ] If WS broadcast (`app.release.published`) was received before download, log shows either `Download bateu com release anunciada` (match) or `NÃO bate` (divergent — investigate).
+- [ ] User clicks "Reiniciar e instalar" → app quits. NSIS installer runs (NOT silent — `quitAndInstallFlags={silent:false}` was passed). User sees the installer UI for ~2s before app re-launches.
+- [ ] After install, app boots on new version, log shows the update was installed cleanly.
+- [ ] Periodic check fires every 6h (visible in log as `[satellite-runtime/updater] Verificação periódica...`).
+- [ ] Force a network failure to trigger error: log shows `[satellite-runtime/updater] Erro:`, store gets `lastFailedUpdateAt`, retry is scheduled for 24h ahead. UI shows "Erro" status.
+
 ## Deferred follow-ups
 
 Not implemented in this migration; tracked separately:
@@ -89,6 +102,6 @@ Not implemented in this migration; tracked separately:
 ## Sign-off
 
 - [ ] All checks above pass on Windows 10/11 packaged build
-- [ ] Date of UAT: ****\_\_\_****
-- [ ] Tested by: ****\_\_\_****
-- [ ] Notes: ****\_\_\_****
+- [ ] Date of UAT: \***\*\_\_\_\*\***
+- [ ] Tested by: \***\*\_\_\_\*\***
+- [ ] Notes: \***\*\_\_\_\*\***
