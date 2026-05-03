@@ -2,7 +2,12 @@ import { app, BrowserWindow, Menu, Notification } from "electron";
 import path from "path";
 import { setupLog, getLogger } from "@opensea/satellite-runtime/log";
 import { ensureSingleInstance } from "@opensea/satellite-runtime/single-instance";
-import { setupAutoLaunch } from "@opensea/satellite-runtime/auto-launch";
+import {
+  setupAutoLaunch,
+  enableAutoLaunch,
+  disableAutoLaunch,
+  isAutoLaunchEnabled,
+} from "@opensea/satellite-runtime/auto-launch";
 import { restoreWindowState } from "@opensea/satellite-runtime/window-state";
 import {
   createSatelliteTray,
@@ -225,6 +230,42 @@ function showMainWindow(): void {
   mainWindow.focus();
 }
 
+/**
+ * Reconcile legacy `store.autoLaunch` (PrintServer 1.6.x and earlier) with the
+ * satellite-runtime auto-launch preference store. Runs once per install.
+ *
+ * Logic:
+ *   - If `autoLaunchBridged` is already true → no-op (already migrated).
+ *   - Else, read the legacy `autoLaunch` flag and call enable/disable on the
+ *     runtime accordingly (which writes to the runtime's namespaced pref store).
+ *   - Mark `autoLaunchBridged = true` so subsequent boots skip this code.
+ *
+ * In dev (`!app.isPackaged`) the runtime devGuard makes enable/disable no-op
+ * — that is the desired behavior; we still flip `autoLaunchBridged` so prod
+ * boots a single canonical bridge after install.
+ */
+async function bridgeAutoLaunchPreference(): Promise<void> {
+  if (store.get("autoLaunchBridged")) return;
+  const legacy = store.get("autoLaunch");
+  log.info(
+    `[main] Bridging legacy auto-launch preference (legacy=${legacy}) into runtime`,
+  );
+  try {
+    if (legacy) {
+      await enableAutoLaunch("OpenSea Print Server", true);
+    } else {
+      await disableAutoLaunch("OpenSea Print Server");
+    }
+  } finally {
+    store.set("autoLaunchBridged", true);
+  }
+  // Sanity check (also exercises isAutoLaunchEnabled in prod):
+  if (app.isPackaged) {
+    const finalState = await isAutoLaunchEnabled("OpenSea Print Server");
+    log.info(`[main] Auto-launch bridge done; final state=${finalState}`);
+  }
+}
+
 function createWindow(): BrowserWindow {
   mainWindow = new BrowserWindow({
     width: 440,
@@ -355,6 +396,15 @@ app.on("ready", async () => {
   createWindow();
   createTray();
 
+  // One-shot bridge: copy the legacy `store.autoLaunch` preference into the
+  // satellite-runtime auto-launch store the first time we boot post-migration.
+  // Without this, users who had auto-launch enabled in 1.6.x would see it
+  // reset to `false` (runtime default) on upgrade (Codex review fix
+  // 2026-05-03).
+  await bridgeAutoLaunchPreference().catch((err) => {
+    log.error("[main] Erro na bridge legacy de auto-launch:", err);
+  });
+
   await setupAutoLaunch({
     name: "OpenSea Print Server",
     isHidden: true,
@@ -391,8 +441,15 @@ app.on("ready", async () => {
   });
 });
 
+// `isQuitting` apenas evita o close-to-tray em `mainWindow.on('close')`.
+// A reentrância dos handlers é garantida pelo once-guard de `runShutdownHandlers`,
+// não por flag local — assim o tray quit (que setava `isQuitting=true` e chamava
+// `app.quit()`) também passa pelo shutdown completo (Codex review 2026-05-03).
+let shutdownInFlight = false;
+
 app.on("before-quit", async (event) => {
-  if (isQuitting) return;
+  if (shutdownInFlight) return;
+  shutdownInFlight = true;
   isQuitting = true;
   event.preventDefault();
   log.info("[main] before-quit: rodando shutdown handlers...");

@@ -31,7 +31,15 @@ const schema = z.object({
   agentName: z.string().nullable(),
   apiUrl: z.string(),
   pairingCode: z.string().nullable(),
+  /** @deprecated — preserved for migration; runtime auto-launch is canonical now. */
   autoLaunch: z.boolean(),
+  /**
+   * One-shot flag set the first time `bridgeAutoLaunchPreference()` runs in
+   * `main.ts`, copying the legacy `autoLaunch` value into the satellite-runtime
+   * auto-launch preference store. Optional so existing stores parse without
+   * a forced reset (Codex review fix 2026-05-03).
+   */
+  autoLaunchBridged: z.boolean().optional(),
   minimizeToTray: z.boolean(),
   pendingUpdateVersion: z.string().nullable(),
   /** Timestamp ms do último update que falhou — usado pelo retry 24h. */
@@ -49,6 +57,7 @@ export const store = createStore({
     apiUrl: PROD_API_URL,
     pairingCode: null,
     autoLaunch: true,
+    autoLaunchBridged: false,
     minimizeToTray: true,
     pendingUpdateVersion: null,
     lastFailedUpdateAt: null,
@@ -68,11 +77,23 @@ export const store = createStore({
         try {
           await setDeviceToken(legacy);
           log.info("[store] deviceToken migrado para keytar");
+          // Só apaga o legado APÓS keytar confirmar a gravação. Se setDeviceToken
+          // falhar (erro de keytar, lock, permissão), preservamos o token em
+          // disco pra próxima inicialização tentar de novo. Apagar antes era
+          // perda definitiva do pareamento (Codex review 2026-05-03).
+          (s as unknown as { delete: (k: string) => void }).delete(
+            "deviceToken",
+          );
         } catch (err) {
-          log.error("[store] Falha ao migrar deviceToken:", err);
+          log.error(
+            "[store] Falha ao migrar deviceToken (mantendo legacy para retry):",
+            err,
+          );
         }
+      } else {
+        // Sem legado pra migrar — limpa qualquer resíduo do schema antigo.
+        (s as unknown as { delete: (k: string) => void }).delete("deviceToken");
       }
-      (s as unknown as { delete: (k: string) => void }).delete("deviceToken");
     },
   },
   onCorruption: "reset",
