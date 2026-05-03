@@ -1,6 +1,6 @@
 {
   "name": "opensea-print-server",
-  "version": "1.6.2",
+  "version": "1.6.3",
   "description": "OpenSea Print Server — Conecte impressoras ao OpenSea remotamente",
   "main": "dist/main/main.js",
   "author": {
