@@ -1,6 +1,6 @@
-import { app } from "electron";
 import log from "electron-log";
 import { z } from "zod";
+import { migrateApiUrl } from "@opensea/satellite-runtime/migrate-api-url";
 import { createStore } from "@opensea/satellite-runtime/store";
 import { setDeviceToken } from "./secure-store";
 
@@ -109,16 +109,14 @@ export const store = createStore({
 });
 
 export function migrateStaleApiUrl(): void {
-  if (!app.isPackaged) return;
-  try {
-    const current = store.get("apiUrl");
-    if (STALE_API_URLS.has(current)) {
-      log.warn(
-        `[store] apiUrl obsoleto (${current}); revertendo ao default Fly.`,
-      );
-      store.set("apiUrl", PROD_API_URL);
-    }
-  } catch (err) {
-    log.error("[store] Falha ao migrar apiUrl obsoleto:", err);
-  }
+  // Default `force: false` preserva o gate `app.isPackaged` original do
+  // PrintServer — devs rodando `npm run dev` continuam podendo manter
+  // localhost manualmente.
+  migrateApiUrl({
+    read: () => store.get("apiUrl"),
+    write: (v) => store.set("apiUrl", v),
+    staleUrls: STALE_API_URLS,
+    canonicalUrl: PROD_API_URL,
+    fieldName: "apiUrl",
+  });
 }
