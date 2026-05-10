@@ -25,6 +25,10 @@
     "test:watch": "vitest",
     "test:e2e": "npm run build && npx playwright test",
     "typecheck": "tsc -p tsconfig.main.json --noEmit",
+    "lint": "biome check",
+    "lint:fix": "biome check --write",
+    "format": "biome format --write",
+    "ci": "biome ci",
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
@@ -35,10 +39,11 @@
     "electron-store": "^8.2.0",
     "electron-updater": "^6.2.1",
     "keytar": "^7.9.0",
-    "zod": "^3.23.0",
-    "ws": "^8.16.0"
+    "ws": "^8.16.0",
+    "zod": "^3.23.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.4.15",
     "@playwright/test": "^1.59.1",
     "@types/auto-launch": "^5.0.5",
     "@types/react": "^19.0.0",
