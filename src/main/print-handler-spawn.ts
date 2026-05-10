@@ -9,7 +9,7 @@
  * spaces or quotes.
  */
 
-import { spawn } from 'child_process';
+import { spawn } from 'node:child_process';
 import log from 'electron-log';
 
 const KILL_GRACE_MS = 1_000;

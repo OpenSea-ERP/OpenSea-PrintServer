@@ -11,6 +11,9 @@ interface PairingFlowProps {
 
 type PairingState = 'input' | 'loading' | 'success' | 'error';
 
+// Stable keys for the 6 fixed TOTP digit slots — positions never reorder.
+const DIGIT_SLOT_KEYS = ['slot-1', 'slot-2', 'slot-3', 'slot-4', 'slot-5', 'slot-6'] as const;
+
 export function PairingFlow({ onBack, onSuccess }: PairingFlowProps) {
   const [digits, setDigits] = useState<string[]>(['', '', '', '', '', '']);
   const [state, setState] = useState<PairingState>('input');
@@ -98,6 +101,7 @@ export function PairingFlow({ onBack, onSuccess }: PairingFlowProps) {
       {/* Header */}
       <div className="flex items-center gap-3 mb-8">
         <button
+          type="button"
           onClick={onBack}
           disabled={state === 'loading'}
           className="
@@ -128,7 +132,7 @@ export function PairingFlow({ onBack, onSuccess }: PairingFlowProps) {
             <div className="flex gap-2.5 mb-8" onPaste={handlePaste}>
               {digits.map((digit, i) => (
                 <input
-                  key={i}
+                  key={DIGIT_SLOT_KEYS[i]}
                   ref={(el) => {
                     inputRefs.current[i] = el;
                   }}
@@ -153,6 +157,7 @@ export function PairingFlow({ onBack, onSuccess }: PairingFlowProps) {
 
             {/* Submit */}
             <button
+              type="button"
               onClick={handleSubmit}
               disabled={!isComplete || state === 'loading'}
               className="
@@ -199,6 +204,7 @@ export function PairingFlow({ onBack, onSuccess }: PairingFlowProps) {
               <p className="text-sm text-slate-400 max-w-xs">{errorMessage}</p>
             </div>
             <button
+              type="button"
               onClick={handleRetry}
               className="
                 h-10 px-6

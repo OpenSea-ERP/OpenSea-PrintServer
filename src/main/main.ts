@@ -1,3 +1,4 @@
+import path from 'node:path';
 import {
   disableAutoLaunch,
   enableAutoLaunch,
@@ -19,7 +20,6 @@ import {
 } from '@opensea/satellite-runtime/updater';
 import { restoreWindowState } from '@opensea/satellite-runtime/window-state';
 import { app, BrowserWindow, Menu, Notification } from 'electron';
-import path from 'path';
 import { setConnected } from './connection-state';
 import { registerIpcHandlers } from './ipc-handlers';
 import { executePrint } from './print-handler';

@@ -48,7 +48,7 @@ export function useIpc<T = unknown>(channel: string, ...args: unknown[]) {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [channel, JSON.stringify(args)]);
+  }, [channel, args]);
 
   useEffect(() => {
     mountedRef.current = true;

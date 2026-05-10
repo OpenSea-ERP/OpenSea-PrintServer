@@ -57,6 +57,7 @@ export function isValidApiUrl(url: string, isPackaged = false): boolean {
 
 export function safeLog(value: string | null | undefined, maxLen = 64): string {
   if (!value) return '(vazio)';
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: intentionally stripping CR/LF/tab/control chars to prevent log injection
   return value.replace(/[\r\n\t\x00-\x1f]/g, '_').slice(0, maxLen);
 }
 
@@ -225,7 +226,7 @@ export function parseWindowsDate(raw: unknown): string {
   }
   try {
     const d = new Date(str);
-    if (isNaN(d.getTime())) return new Date().toISOString();
+    if (Number.isNaN(d.getTime())) return new Date().toISOString();
     return d.toISOString();
   } catch {
     return new Date().toISOString();

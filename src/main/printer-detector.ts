@@ -1,7 +1,7 @@
-import { exec } from 'child_process';
+import { exec } from 'node:child_process';
+import net from 'node:net';
+import { promisify } from 'node:util';
 import log from 'electron-log';
-import net from 'net';
-import { promisify } from 'util';
 
 const execAsync = promisify(exec);
 

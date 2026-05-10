@@ -42,6 +42,7 @@ export function EmptyState({ onStartPairing }: EmptyStateProps) {
 
         {/* CTA Button */}
         <button
+          type="button"
           onClick={onStartPairing}
           className="
             w-full max-w-xs h-11 px-6

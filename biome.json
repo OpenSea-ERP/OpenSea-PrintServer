@@ -65,8 +65,7 @@
         "noExplicitAny": "off",
         "noEmptyBlockStatements": "off",
         "noArrayIndexKey": "warn",
-        "noUnknownAtRules": "off",
-        "noControlCharactersInRegex": "warn"
+        "noUnknownAtRules": "off"
       },
       "style": {
         "useImportType": "warn",
@@ -80,7 +79,6 @@
       },
       "a11y": {
         "useKeyWithClickEvents": "off",
-        "useButtonType": "warn",
         "noStaticElementInteractions": "off"
       },
       "performance": {

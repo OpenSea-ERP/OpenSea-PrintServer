@@ -1,6 +1,5 @@
 import { AlertCircle, CheckCircle2, Download, Loader2, Waves, X } from 'lucide-react';
 import type { UpdateStatus } from '../preload';
-import { cn } from '../utils';
 
 interface UpdateModalProps {
   status: UpdateStatus;
@@ -24,6 +23,7 @@ export function UpdateModal({ status, onClose, onInstall }: UpdateModalProps) {
           </div>
           {canClose && (
             <button
+              type="button"
               onClick={onClose}
               className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-slate-700 text-slate-400 transition-colors"
             >
@@ -106,12 +106,14 @@ export function UpdateModal({ status, onClose, onInstall }: UpdateModalProps) {
               </div>
               <div className="flex gap-2 w-full">
                 <button
+                  type="button"
                   onClick={onClose}
                   className="flex-1 h-9 text-xs font-medium text-slate-300 bg-slate-700/50 border border-slate-600/50 rounded-lg hover:bg-slate-700 transition-colors"
                 >
                   Mais tarde
                 </button>
                 <button
+                  type="button"
                   onClick={onInstall}
                   className="flex-1 h-9 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg flex items-center justify-center gap-1.5 transition-colors"
                 >

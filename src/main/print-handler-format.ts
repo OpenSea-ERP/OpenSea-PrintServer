@@ -5,10 +5,10 @@
  * stream raw bytes straight to the spooler.
  */
 
-import { randomUUID } from 'crypto';
-import { unlink } from 'fs/promises';
-import { tmpdir } from 'os';
-import { join } from 'path';
+import { randomUUID } from 'node:crypto';
+import { unlink } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 export type PrintFormat = 'pdf' | 'postscript' | 'raw';
 

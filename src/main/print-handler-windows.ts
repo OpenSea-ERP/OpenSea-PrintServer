@@ -15,8 +15,8 @@
  * the Windows printer queue.
  */
 
+import { writeFile } from 'node:fs/promises';
 import log from 'electron-log';
-import { writeFile } from 'fs/promises';
 import type { PrintResult } from './print-handler';
 import { cleanupTempFile, getTempFilePath, type PrintFormat } from './print-handler-format';
 import { runChild } from './print-handler-spawn';

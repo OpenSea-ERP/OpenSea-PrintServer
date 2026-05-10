@@ -14,6 +14,7 @@
  * already understands.
  */
 
+import { EventEmitter } from 'node:events';
 import type {
   WsAppReleasePublishedMessage,
   WsDeviceRevokedMessage,
@@ -24,7 +25,6 @@ import {
   type RevokedEventPayload,
   SatelliteWSClient,
 } from '@opensea/satellite-runtime/ws-client';
-import { EventEmitter } from 'events';
 
 // ── Types (preserved for consumers) ──────────────────────────────────────
 

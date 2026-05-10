@@ -89,6 +89,7 @@ export function Dashboard({ status, onOpenSettings }: DashboardProps) {
           {/* Right: settings (icon only) + connection status (icon only) */}
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={onOpenSettings}
               className="
                 h-9 w-9 flex items-center justify-center
@@ -130,6 +131,7 @@ export function Dashboard({ status, onOpenSettings }: DashboardProps) {
             )}
           </div>
           <button
+            type="button"
             onClick={handleRefreshPrinters}
             disabled={refreshing}
             className="

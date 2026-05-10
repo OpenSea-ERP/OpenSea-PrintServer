@@ -1,5 +1,5 @@
+import path from 'node:path';
 import { type ElectronApplication, _electron as electron, type Page } from '@playwright/test';
-import path from 'path';
 
 /**
  * Lança o Electron app para testes E2E.

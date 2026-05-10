@@ -116,6 +116,7 @@ export function Settings({ onBack, onUnpair }: SettingsProps) {
       {/* Header */}
       <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-800">
         <button
+          type="button"
           onClick={onBack}
           className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-slate-800 text-slate-400 transition-colors"
         >
@@ -193,6 +194,7 @@ export function Settings({ onBack, onUnpair }: SettingsProps) {
             </div>
             {updateStatus.status === 'downloaded' ? (
               <button
+                type="button"
                 onClick={handleInstallUpdate}
                 className="w-full h-9 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-colors"
               >
@@ -201,6 +203,7 @@ export function Settings({ onBack, onUnpair }: SettingsProps) {
               </button>
             ) : (
               <button
+                type="button"
                 onClick={handleCheckUpdate}
                 disabled={checkingUpdate}
                 className="
@@ -229,6 +232,7 @@ export function Settings({ onBack, onUnpair }: SettingsProps) {
               enviar impressões.
             </p>
             <button
+              type="button"
               onClick={() => setShowUnpairModal(true)}
               className="
                 w-full h-9 flex items-center justify-center gap-1.5
@@ -273,6 +277,7 @@ export function Settings({ onBack, onUnpair }: SettingsProps) {
               {/* Buttons */}
               <div className="flex gap-3">
                 <button
+                  type="button"
                   onClick={() => setShowUnpairModal(false)}
                   className="
                     flex-1 h-9 text-xs font-medium text-slate-300
@@ -283,6 +288,7 @@ export function Settings({ onBack, onUnpair }: SettingsProps) {
                   Cancelar
                 </button>
                 <button
+                  type="button"
                   onClick={handleConfirmUnpair}
                   className="
                     flex-1 h-9 text-xs font-semibold text-white

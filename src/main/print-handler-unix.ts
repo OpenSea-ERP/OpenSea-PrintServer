@@ -4,8 +4,8 @@
  * and raw byte streams transparently. No viewer launch, no window flash.
  */
 
+import { writeFile } from 'node:fs/promises';
 import log from 'electron-log';
-import { writeFile } from 'fs/promises';
 import type { PrintResult } from './print-handler';
 import { cleanupTempFile, detectFormat, getTempFilePath } from './print-handler-format';
 import { runChild } from './print-handler-spawn';

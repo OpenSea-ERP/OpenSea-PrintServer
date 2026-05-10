@@ -46,6 +46,7 @@ function isValidApiUrl(url: string): boolean {
 // ── Sanitização de strings para log ───────────────────────────────────────────
 function safeLog(value: string | null | undefined, maxLen = 64): string {
   if (!value) return '(vazio)';
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: intentionally stripping CR/LF/tab/control chars to prevent log injection
   return value.replace(/[\r\n\t\x00-\x1f]/g, '_').slice(0, maxLen);
 }
 
@@ -143,7 +144,7 @@ function registerIpcHandlers(): void {
       }
 
       const apiUrl = store.get('apiUrl');
-      const hostname = (await import('os')).hostname();
+      const hostname = (await import('node:os')).hostname();
       const codePrefix = code.slice(0, 2);
 
       log.info(

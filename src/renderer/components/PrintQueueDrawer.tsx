@@ -162,6 +162,7 @@ export function PrintQueueDrawer({
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-slate-800 text-slate-500 transition-colors"
           >
@@ -176,6 +177,7 @@ export function PrintQueueDrawer({
               {jobs.length} documento{jobs.length !== 1 ? 's' : ''} na fila
             </span>
             <button
+              type="button"
               onClick={handleClearAll}
               disabled={actionLoading === -1}
               className="
@@ -257,6 +259,7 @@ export function PrintQueueDrawer({
                       <div className="flex items-center gap-1">
                         {job.status === 'paused' ? (
                           <button
+                            type="button"
                             onClick={() => handleManage(job.id, 'resume')}
                             disabled={isActive}
                             className="h-6 w-6 flex items-center justify-center rounded hover:bg-slate-800 text-slate-500 hover:text-emerald-400 transition-colors"
@@ -266,6 +269,7 @@ export function PrintQueueDrawer({
                           </button>
                         ) : job.status !== 'deleting' ? (
                           <button
+                            type="button"
                             onClick={() => handleManage(job.id, 'pause')}
                             disabled={isActive}
                             className="h-6 w-6 flex items-center justify-center rounded hover:bg-slate-800 text-slate-500 hover:text-amber-400 transition-colors"
@@ -276,6 +280,7 @@ export function PrintQueueDrawer({
                         ) : null}
                         {job.status === 'error' && (
                           <button
+                            type="button"
                             onClick={() => handleManage(job.id, 'restart')}
                             disabled={isActive}
                             className="h-6 w-6 flex items-center justify-center rounded hover:bg-slate-800 text-slate-500 hover:text-blue-400 transition-colors"
@@ -285,6 +290,7 @@ export function PrintQueueDrawer({
                           </button>
                         )}
                         <button
+                          type="button"
                           onClick={() => handleCancel(job.id)}
                           disabled={isActive}
                           className="h-6 w-6 flex items-center justify-center rounded hover:bg-slate-800 text-slate-500 hover:text-rose-400 transition-colors"
