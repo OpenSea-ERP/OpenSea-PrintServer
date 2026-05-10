@@ -65,7 +65,8 @@
         "noExplicitAny": "off",
         "noEmptyBlockStatements": "off",
         "noArrayIndexKey": "warn",
-        "noUnknownAtRules": "off"
+        "noUnknownAtRules": "off",
+        "noControlCharactersInRegex": "warn"
       },
       "style": {
         "useImportType": "warn",
