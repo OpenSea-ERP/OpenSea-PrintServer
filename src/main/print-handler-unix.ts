@@ -4,15 +4,11 @@
  * and raw byte streams transparently. No viewer launch, no window flash.
  */
 
-import { writeFile } from "fs/promises";
-import log from "electron-log";
-import {
-  cleanupTempFile,
-  detectFormat,
-  getTempFilePath,
-} from "./print-handler-format";
-import { runChild } from "./print-handler-spawn";
-import type { PrintResult } from "./print-handler";
+import log from 'electron-log';
+import { writeFile } from 'fs/promises';
+import type { PrintResult } from './print-handler';
+import { cleanupTempFile, detectFormat, getTempFilePath } from './print-handler-format';
+import { runChild } from './print-handler-spawn';
 
 const RAW_TIMEOUT_MS = 30_000;
 
@@ -28,8 +24,8 @@ export async function printUnix(
     await writeFile(tempPath, data);
 
     const res = await runChild(
-      "lp",
-      ["-d", printerName, "-n", String(copies), tempPath],
+      'lp',
+      ['-d', printerName, '-n', String(copies), tempPath],
       RAW_TIMEOUT_MS,
     );
 
@@ -37,9 +33,7 @@ export async function printUnix(
       return { success: false, error: `lp falhou: ${res.error}` };
     }
 
-    log.info(
-      `[Print] Job ${jobId}: enviado via lp — ${res.stdout?.trim() ?? ""}`,
-    );
+    log.info(`[Print] Job ${jobId}: enviado via lp — ${res.stdout?.trim() ?? ''}`);
     return { success: true };
   } finally {
     await cleanupTempFile(tempPath);

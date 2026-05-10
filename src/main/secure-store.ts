@@ -12,16 +12,13 @@
  * API genérica e preserva a superfície pública usada por main.ts, ipc-
  * handlers.ts e store.ts (migration 1.5.0 do legacy electron-store).
  */
-import { createSecureStore } from "@opensea/satellite-runtime/secure-store";
+import { createSecureStore } from '@opensea/satellite-runtime/secure-store';
 
-const SERVICE = "OpenSea-PrintServer";
-const TOKEN_ACCOUNT = "deviceToken";
+const SERVICE = 'OpenSea-PrintServer';
+const TOKEN_ACCOUNT = 'deviceToken';
 
 const inner = createSecureStore({ service: SERVICE });
 
-export const getDeviceToken = (): Promise<string | null> =>
-  inner.get(TOKEN_ACCOUNT);
-export const setDeviceToken = (token: string): Promise<void> =>
-  inner.set(TOKEN_ACCOUNT, token);
-export const deleteDeviceToken = (): Promise<void> =>
-  inner.delete(TOKEN_ACCOUNT);
+export const getDeviceToken = (): Promise<string | null> => inner.get(TOKEN_ACCOUNT);
+export const setDeviceToken = (token: string): Promise<void> => inner.set(TOKEN_ACCOUNT, token);
+export const deleteDeviceToken = (): Promise<void> => inner.delete(TOKEN_ACCOUNT);

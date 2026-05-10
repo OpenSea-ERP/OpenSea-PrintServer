@@ -1,15 +1,15 @@
-import log from "electron-log";
-import { z } from "zod";
-import { migrateApiUrl } from "@opensea/satellite-runtime/migrate-api-url";
-import { createStore } from "@opensea/satellite-runtime/store";
-import { setDeviceToken } from "./secure-store";
+import { migrateApiUrl } from '@opensea/satellite-runtime/migrate-api-url';
+import { createStore } from '@opensea/satellite-runtime/store';
+import log from 'electron-log';
+import { z } from 'zod';
+import { setDeviceToken } from './secure-store';
 
 /**
  * Backend de produção (Fly.io app `opensea-api`, região gru). Espelha o
  * default do Emporion (`settings-store.ts`) — todos os satélites apontam
  * para o mesmo cluster.
  */
-const PROD_API_URL = "https://opensea-api.fly.dev";
+const PROD_API_URL = 'https://opensea-api.fly.dev';
 
 /**
  * URLs que ficaram persistidas em instalações que tomaram um default
@@ -21,9 +21,9 @@ const PROD_API_URL = "https://opensea-api.fly.dev";
  * `npm run dev` continuam podendo manter localhost manualmente.
  */
 const STALE_API_URLS = new Set<string>([
-  "http://localhost:3333",
-  "https://api.opensea.com.br",
-  "https://opensea-api-8tv2.onrender.com",
+  'http://localhost:3333',
+  'https://api.opensea.com.br',
+  'https://opensea-api-8tv2.onrender.com',
 ]);
 
 const schema = z.object({
@@ -57,7 +57,7 @@ const schema = z.object({
 export type StoreSchema = z.infer<typeof schema>;
 
 export const store = createStore({
-  name: "config",
+  name: 'config',
   schema,
   defaults: {
     agentId: null,
@@ -72,40 +72,33 @@ export const store = createStore({
     lastFailedUpdateAt: null,
   },
   migrations: {
-    "1.4.0": (s) => {
-      const current = s.get("apiUrl");
-      if (current === "https://api.opensea.com.br") {
-        s.set("apiUrl", "http://localhost:3333");
+    '1.4.0': (s) => {
+      const current = s.get('apiUrl');
+      if (current === 'https://api.opensea.com.br') {
+        s.set('apiUrl', 'http://localhost:3333');
       }
     },
-    "1.5.0": async (s) => {
-      const legacy = (s as unknown as { get: (k: string) => unknown }).get(
-        "deviceToken",
-      );
-      if (typeof legacy === "string" && legacy.length > 0) {
+    '1.5.0': async (s) => {
+      const legacy = (s as unknown as { get: (k: string) => unknown }).get('deviceToken');
+      if (typeof legacy === 'string' && legacy.length > 0) {
         try {
           await setDeviceToken(legacy);
-          log.info("[store] deviceToken migrado para keytar");
+          log.info('[store] deviceToken migrado para keytar');
           // Só apaga o legado APÓS keytar confirmar a gravação. Se setDeviceToken
           // falhar (erro de keytar, lock, permissão), preservamos o token em
           // disco pra próxima inicialização tentar de novo. Apagar antes era
           // perda definitiva do pareamento (Codex review 2026-05-03).
-          (s as unknown as { delete: (k: string) => void }).delete(
-            "deviceToken",
-          );
+          (s as unknown as { delete: (k: string) => void }).delete('deviceToken');
         } catch (err) {
-          log.error(
-            "[store] Falha ao migrar deviceToken (mantendo legacy para retry):",
-            err,
-          );
+          log.error('[store] Falha ao migrar deviceToken (mantendo legacy para retry):', err);
         }
       } else {
         // Sem legado pra migrar — limpa qualquer resíduo do schema antigo.
-        (s as unknown as { delete: (k: string) => void }).delete("deviceToken");
+        (s as unknown as { delete: (k: string) => void }).delete('deviceToken');
       }
     },
   },
-  onCorruption: "reset",
+  onCorruption: 'reset',
 });
 
 export function migrateStaleApiUrl(): void {
@@ -113,10 +106,10 @@ export function migrateStaleApiUrl(): void {
   // PrintServer — devs rodando `npm run dev` continuam podendo manter
   // localhost manualmente.
   migrateApiUrl({
-    read: () => store.get("apiUrl"),
-    write: (v) => store.set("apiUrl", v),
+    read: () => store.get('apiUrl'),
+    write: (v) => store.set('apiUrl', v),
     staleUrls: STALE_API_URLS,
     canonicalUrl: PROD_API_URL,
-    fieldName: "apiUrl",
+    fieldName: 'apiUrl',
   });
 }

@@ -1,16 +1,16 @@
-import { ArrowRight, Printer, Waves } from "lucide-react";
-import { useEffect, useState } from "react";
-import { invokeIpc } from "../hooks/useIpc";
+import { ArrowRight, Printer, Waves } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { invokeIpc } from '../hooks/useIpc';
 
 interface EmptyStateProps {
   onStartPairing: () => void;
 }
 
 export function EmptyState({ onStartPairing }: EmptyStateProps) {
-  const [version, setVersion] = useState("1.0.0");
+  const [version, setVersion] = useState('1.0.0');
 
   useEffect(() => {
-    invokeIpc<string>("app:get-version")
+    invokeIpc<string>('app:get-version')
       .then((v) => setVersion(v))
       .catch(() => {});
   }, []);
@@ -33,14 +33,11 @@ export function EmptyState({ onStartPairing }: EmptyStateProps) {
         </div>
 
         {/* Heading */}
-        <h1 className="text-xl font-bold text-slate-100 my-4">
-          Bem-vindo ao Print Server
-        </h1>
+        <h1 className="text-xl font-bold text-slate-100 my-4">Bem-vindo ao Print Server</h1>
 
         {/* Description */}
         <p className="text-sm text-slate-400 leading-relaxed max-w-xs mb-8">
-          Conecte este computador ao OpenSea para gerenciar e executar
-          impressões remotamente.
+          Conecte este computador ao OpenSea para gerenciar e executar impressões remotamente.
         </p>
 
         {/* CTA Button */}
@@ -62,9 +59,7 @@ export function EmptyState({ onStartPairing }: EmptyStateProps) {
       </div>
 
       {/* Version */}
-      <span className="absolute bottom-5 text-xs text-slate-600">
-        v{version}
-      </span>
+      <span className="absolute bottom-5 text-xs text-slate-600">v{version}</span>
     </div>
   );
 }

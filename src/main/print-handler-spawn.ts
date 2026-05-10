@@ -9,8 +9,8 @@
  * spaces or quotes.
  */
 
-import { spawn } from "child_process";
-import log from "electron-log";
+import { spawn } from 'child_process';
+import log from 'electron-log';
 
 const KILL_GRACE_MS = 1_000;
 
@@ -21,14 +21,10 @@ export interface ChildResult {
   error?: string;
 }
 
-export function runChild(
-  command: string,
-  args: string[],
-  timeoutMs: number,
-): Promise<ChildResult> {
+export function runChild(command: string, args: string[], timeoutMs: number): Promise<ChildResult> {
   return new Promise((resolve) => {
-    let stdout = "";
-    let stderr = "";
+    let stdout = '';
+    let stderr = '';
     let settled = false;
 
     const child = spawn(command, args, {
@@ -39,11 +35,11 @@ export function runChild(
     const timeout = setTimeout(() => {
       if (settled) return;
       log.warn(`[Print] Timeout ${timeoutMs}ms — matando processo ${command}`);
-      child.kill("SIGTERM");
+      child.kill('SIGTERM');
       setTimeout(() => {
         if (!child.killed) {
           try {
-            child.kill("SIGKILL");
+            child.kill('SIGKILL');
           } catch {
             // noop
           }
@@ -51,27 +47,27 @@ export function runChild(
       }, KILL_GRACE_MS);
     }, timeoutMs);
 
-    child.stdout?.on("data", (buf) => {
+    child.stdout?.on('data', (buf) => {
       stdout += buf.toString();
     });
 
-    child.stderr?.on("data", (buf) => {
+    child.stderr?.on('data', (buf) => {
       stderr += buf.toString();
     });
 
-    child.on("error", (err) => {
+    child.on('error', (err) => {
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
       resolve({ success: false, error: err.message });
     });
 
-    child.on("close", (code, signal) => {
+    child.on('close', (code, signal) => {
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
 
-      if (signal === "SIGTERM" || signal === "SIGKILL") {
+      if (signal === 'SIGTERM' || signal === 'SIGKILL') {
         resolve({
           success: false,
           error: `Morto por timeout (${signal})`,
@@ -84,7 +80,7 @@ export function runChild(
       if (code !== 0) {
         resolve({
           success: false,
-          error: `Exit code ${code}${stderr ? `: ${stderr.trim()}` : ""}`,
+          error: `Exit code ${code}${stderr ? `: ${stderr.trim()}` : ''}`,
           stdout,
           stderr,
         });

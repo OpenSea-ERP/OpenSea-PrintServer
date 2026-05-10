@@ -35,15 +35,26 @@ export async function getJobs(printerName: string): Promise<PrintJob[]> {
   }
 }
 
-export async function cancelJob(printerName: string, jobId: number): Promise<{ success: boolean; error?: string }> {
+export async function cancelJob(
+  printerName: string,
+  jobId: number,
+): Promise<{ success: boolean; error?: string }> {
   try {
     switch (process.platform) {
       case 'win32':
-        await runChild('powershell', [
-          '-NoProfile', '-NonInteractive', '-Command',
-          'Remove-PrintJob -PrinterName $args[0] -ID $args[1] -ErrorAction Stop',
-          '-args', printerName, String(jobId),
-        ], CMD_TIMEOUT_MS);
+        await runChild(
+          'powershell',
+          [
+            '-NoProfile',
+            '-NonInteractive',
+            '-Command',
+            'Remove-PrintJob -PrinterName $args[0] -ID $args[1] -ErrorAction Stop',
+            '-args',
+            printerName,
+            String(jobId),
+          ],
+          CMD_TIMEOUT_MS,
+        );
         break;
       case 'darwin':
       case 'linux':
@@ -96,10 +107,11 @@ async function getJobsWindows(printerName: string): Promise<PrintJob[]> {
     'if ($jobs) { $jobs | ConvertTo-Json -Compress } else { "[]" }',
   ].join(' ');
 
-  const result = await runChild('powershell', [
-    '-NoProfile', '-NonInteractive', '-Command',
-    psCommand, '-args', printerName,
-  ], CMD_TIMEOUT_MS);
+  const result = await runChild(
+    'powershell',
+    ['-NoProfile', '-NonInteractive', '-Command', psCommand, '-args', printerName],
+    CMD_TIMEOUT_MS,
+  );
 
   if (!result.stdout?.trim() || result.stdout.trim() === '[]') return [];
 
@@ -144,12 +156,17 @@ function mapWindowsJobStatus(status: string): PrintJob['status'] {
   const lower = status.toLowerCase();
   if (lower.includes('print') || lower.includes('spool')) return 'printing';
   if (lower.includes('paus')) return 'paused';
-  if (lower.includes('error') || lower.includes('fail') || lower.includes('blocked')) return 'error';
+  if (lower.includes('error') || lower.includes('fail') || lower.includes('blocked'))
+    return 'error';
   if (lower.includes('delet')) return 'deleting';
   return 'queued';
 }
 
-async function manageJobWindows(printerName: string, jobId: number, action: ManageAction): Promise<void> {
+async function manageJobWindows(
+  printerName: string,
+  jobId: number,
+  action: ManageAction,
+): Promise<void> {
   let command: string;
 
   switch (action) {
@@ -163,16 +180,18 @@ async function manageJobWindows(printerName: string, jobId: number, action: Mana
       command = 'Resume-PrintJob -PrinterName $args[0] -ID $args[1] -ErrorAction Stop';
       break;
     case 'clear-all':
-      command = 'Get-PrintJob -PrinterName $args[0] -ErrorAction SilentlyContinue | Remove-PrintJob -ErrorAction SilentlyContinue';
+      command =
+        'Get-PrintJob -PrinterName $args[0] -ErrorAction SilentlyContinue | Remove-PrintJob -ErrorAction SilentlyContinue';
       break;
     default:
       throw new Error(`Ação desconhecida: ${action}`);
   }
 
-  const result = await runChild('powershell', [
-    '-NoProfile', '-NonInteractive', '-Command',
-    command, '-args', printerName, String(jobId),
-  ], CMD_TIMEOUT_MS);
+  const result = await runChild(
+    'powershell',
+    ['-NoProfile', '-NonInteractive', '-Command', command, '-args', printerName, String(jobId)],
+    CMD_TIMEOUT_MS,
+  );
 
   if (!result.success && result.stderr) {
     throw new Error(result.stderr.trim());
@@ -210,7 +229,11 @@ async function getJobsUnix(printerName: string): Promise<PrintJob[]> {
   return jobs;
 }
 
-async function manageJobUnix(printerName: string, jobId: number, action: ManageAction): Promise<void> {
+async function manageJobUnix(
+  printerName: string,
+  jobId: number,
+  action: ManageAction,
+): Promise<void> {
   switch (action) {
     case 'restart':
       await runChild('lp', ['-i', String(jobId), '-H', 'restart'], CMD_TIMEOUT_MS);
@@ -249,12 +272,21 @@ function runChild(command: string, args: string[], timeoutMs: number): Promise<C
       if (settled) return;
       child.kill('SIGTERM');
       setTimeout(() => {
-        if (!child.killed) try { child.kill('SIGKILL'); } catch { /* noop */ }
+        if (!child.killed)
+          try {
+            child.kill('SIGKILL');
+          } catch {
+            /* noop */
+          }
       }, KILL_GRACE_MS);
     }, timeoutMs);
 
-    child.stdout?.on('data', (buf) => { stdout += buf.toString(); });
-    child.stderr?.on('data', (buf) => { stderr += buf.toString(); });
+    child.stdout?.on('data', (buf) => {
+      stdout += buf.toString();
+    });
+    child.stderr?.on('data', (buf) => {
+      stderr += buf.toString();
+    });
 
     child.on('error', (err) => {
       if (settled) return;

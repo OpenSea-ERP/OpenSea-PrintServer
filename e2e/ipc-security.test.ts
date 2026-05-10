@@ -1,6 +1,6 @@
-import { test, expect } from '@playwright/test';
-import { launchApp } from './electron-app';
 import type { ElectronApplication, Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
+import { launchApp } from './electron-app';
 
 let app: ElectronApplication;
 let page: Page;
@@ -115,7 +115,9 @@ test('printers:list retorna array', async () => {
 
 test('cada impressora tem name, status, isDefault', async () => {
   const printers = await page.evaluate(async () => {
-    return window.electronAPI.invoke<Array<{ name: string; status: number; isDefault: boolean }>>('printers:list');
+    return window.electronAPI.invoke<Array<{ name: string; status: number; isDefault: boolean }>>(
+      'printers:list',
+    );
   });
   if ((printers as unknown[]).length === 0) {
     test.skip(); // Nenhuma impressora no sistema

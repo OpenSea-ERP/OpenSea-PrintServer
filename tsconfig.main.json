@@ -14,9 +14,7 @@
     "sourceMap": false,
     "baseUrl": ".",
     "paths": {
-      "@opensea/satellite-runtime": [
-        "./node_modules/@opensea/satellite-runtime/dist/index.d.ts"
-      ],
+      "@opensea/satellite-runtime": ["./node_modules/@opensea/satellite-runtime/dist/index.d.ts"],
       "@opensea/satellite-runtime/*": [
         "./node_modules/@opensea/satellite-runtime/dist/*/index.d.ts"
       ]

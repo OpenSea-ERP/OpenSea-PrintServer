@@ -1,14 +1,11 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 const IPC_TIMEOUT_MS = 30_000;
 
 /**
  * Invoca um canal IPC com timeout global. Impede UI congelada caso o main trave.
  */
-export async function invokeIpc<T = unknown>(
-  channel: string,
-  ...args: unknown[]
-): Promise<T> {
+export async function invokeIpc<T = unknown>(channel: string, ...args: unknown[]): Promise<T> {
   if (!window.electronAPI) {
     throw new Error('electronAPI indisponível — rodando fora do Electron?');
   }
@@ -68,10 +65,7 @@ export function useIpc<T = unknown>(channel: string, ...args: unknown[]) {
  * Subscreve a um canal IPC. Mantém identity do handler estável via ref —
  * evita vazamento de listeners quando o caller passa um handler inline novo a cada render.
  */
-export function useIpcEvent<T = unknown>(
-  channel: string,
-  handler: (data: T) => void,
-) {
+export function useIpcEvent<T = unknown>(channel: string, handler: (data: T) => void) {
   const handlerRef = useRef(handler);
 
   useEffect(() => {

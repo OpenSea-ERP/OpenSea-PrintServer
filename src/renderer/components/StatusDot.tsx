@@ -27,9 +27,17 @@ export function StatusDot({ status, size = 'md', pulse = false, className }: Sta
   return (
     <span className={cn('relative inline-flex', className)}>
       {pulse && status === 'online' && (
-        <span className={cn('absolute inline-flex rounded-full opacity-40 animate-ping', SIZES[size], STATUS_COLORS[status])} />
+        <span
+          className={cn(
+            'absolute inline-flex rounded-full opacity-40 animate-ping',
+            SIZES[size],
+            STATUS_COLORS[status],
+          )}
+        />
       )}
-      <span className={cn('relative inline-flex rounded-full', SIZES[size], STATUS_COLORS[status])} />
+      <span
+        className={cn('relative inline-flex rounded-full', SIZES[size], STATUS_COLORS[status])}
+      />
     </span>
   );
 }

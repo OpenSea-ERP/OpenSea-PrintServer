@@ -8,33 +8,29 @@
 const MAX_PAYLOAD = 10 * 1024 * 1024;
 
 export function isValidIncomingMessage(raw: unknown): boolean {
-  if (!raw || typeof raw !== "object") return false;
+  if (!raw || typeof raw !== 'object') return false;
   const msg = raw as { type?: unknown };
 
-  if (msg.type === "request-printers") return true;
+  if (msg.type === 'request-printers') return true;
 
-  if (msg.type === "print") {
+  if (msg.type === 'print') {
     const m = raw as Record<string, unknown>;
     // Accept either `printerName` (preferred — contract revision
     // 2026-05-02) or the legacy `printerId` whose value is also an
     // OS-level device name. Mirrors the runtime ws-client.ts validator.
     const hasPrinterName =
-      typeof m.printerName === "string" &&
-      m.printerName.length > 0 &&
-      m.printerName.length <= 256;
+      typeof m.printerName === 'string' && m.printerName.length > 0 && m.printerName.length <= 256;
     const hasPrinterId =
-      typeof m.printerId === "string" &&
-      m.printerId.length > 0 &&
-      m.printerId.length <= 256;
+      typeof m.printerId === 'string' && m.printerId.length > 0 && m.printerId.length <= 256;
     return (
-      typeof m.jobId === "string" &&
+      typeof m.jobId === 'string' &&
       m.jobId.length > 0 &&
       m.jobId.length <= 128 &&
       (hasPrinterName || hasPrinterId) &&
-      typeof m.data === "string" &&
+      typeof m.data === 'string' &&
       m.data.length > 0 &&
       m.data.length <= MAX_PAYLOAD &&
-      typeof m.copies === "number" &&
+      typeof m.copies === 'number' &&
       Number.isInteger(m.copies) &&
       m.copies >= 1 &&
       m.copies <= 999
@@ -49,8 +45,8 @@ export function isValidIncomingMessage(raw: unknown): boolean {
 export function isValidApiUrl(url: string, isPackaged = false): boolean {
   try {
     const parsed = new URL(url);
-    if (!["http:", "https:"].includes(parsed.protocol)) return false;
-    if (isPackaged && parsed.protocol !== "https:") return false;
+    if (!['http:', 'https:'].includes(parsed.protocol)) return false;
+    if (isPackaged && parsed.protocol !== 'https:') return false;
     return true;
   } catch {
     return false;
@@ -60,8 +56,8 @@ export function isValidApiUrl(url: string, isPackaged = false): boolean {
 // ── Log sanitization ─────────────────────────────────────────────────────
 
 export function safeLog(value: string | null | undefined, maxLen = 64): string {
-  if (!value) return "(vazio)";
-  return value.replace(/[\r\n\t\x00-\x1f]/g, "_").slice(0, maxLen);
+  if (!value) return '(vazio)';
+  return value.replace(/[\r\n\t\x00-\x1f]/g, '_').slice(0, maxLen);
 }
 
 // ── Rate limiter ─────────────────────────────────────────────────────────
@@ -80,7 +76,7 @@ export function createRateLimiter() {
 
 // ── Print format detection ───────────────────────────────────────────────
 
-export type PrintFormat = "pdf" | "postscript" | "raw";
+export type PrintFormat = 'pdf' | 'postscript' | 'raw';
 
 export function detectFormat(data: Buffer): PrintFormat {
   if (
@@ -90,12 +86,12 @@ export function detectFormat(data: Buffer): PrintFormat {
     data[2] === 0x44 &&
     data[3] === 0x46
   ) {
-    return "pdf"; // %PDF
+    return 'pdf'; // %PDF
   }
   if (data.length >= 2 && data[0] === 0x25 && data[1] === 0x21) {
-    return "postscript"; // %!
+    return 'postscript'; // %!
   }
-  return "raw";
+  return 'raw';
 }
 
 // ── Network printer IP extraction ────────────────────────────────────────
@@ -103,8 +99,8 @@ export function detectFormat(data: Buffer): PrintFormat {
 export function extractIpFromPort(portName: string): string | null {
   if (!portName) return null;
   const cleaned = portName
-    .replace(/^(IP_|TCP_|TCPMON:|WSD-)/i, "")
-    .split("_")[0]
+    .replace(/^(IP_|TCP_|TCPMON:|WSD-)/i, '')
+    .split('_')[0]
     .trim();
 
   const match = cleaned.match(/^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/);
@@ -113,8 +109,8 @@ export function extractIpFromPort(portName: string): string | null {
 
 // ── Printer status mapping ───────────────────────────────────────────────
 
-export type DetectorStatus = "ready" | "offline" | "error" | "unknown";
-export type BackendStatus = "ONLINE" | "OFFLINE" | "ERROR" | "UNKNOWN";
+export type DetectorStatus = 'ready' | 'offline' | 'error' | 'unknown';
+export type BackendStatus = 'ONLINE' | 'OFFLINE' | 'ERROR' | 'UNKNOWN';
 
 export enum PrinterStatusCode {
   ONLINE = 0,
@@ -125,11 +121,11 @@ export enum PrinterStatusCode {
 
 export function detectorToCode(status: DetectorStatus): PrinterStatusCode {
   switch (status) {
-    case "ready":
+    case 'ready':
       return PrinterStatusCode.ONLINE;
-    case "offline":
+    case 'offline':
       return PrinterStatusCode.OFFLINE;
-    case "error":
+    case 'error':
       return PrinterStatusCode.ERROR;
     default:
       return PrinterStatusCode.UNKNOWN;
@@ -138,14 +134,14 @@ export function detectorToCode(status: DetectorStatus): PrinterStatusCode {
 
 export function detectorToBackend(status: DetectorStatus): BackendStatus {
   switch (status) {
-    case "ready":
-      return "ONLINE";
-    case "offline":
-      return "OFFLINE";
-    case "error":
-      return "ERROR";
+    case 'ready':
+      return 'ONLINE';
+    case 'offline':
+      return 'OFFLINE';
+    case 'error':
+      return 'ERROR';
     default:
-      return "UNKNOWN";
+      return 'UNKNOWN';
   }
 }
 
@@ -158,79 +154,66 @@ export interface Win32PrinterFields {
   PnpStatus?: string;
 }
 
-export function mapWindowsStatusWithPnp(
-  printer: Win32PrinterFields,
-): DetectorStatus {
-  const isUsb = (printer.PortName ?? "").toUpperCase().startsWith("USB");
+export function mapWindowsStatusWithPnp(printer: Win32PrinterFields): DetectorStatus {
+  const isUsb = (printer.PortName ?? '').toUpperCase().startsWith('USB');
 
   if (isUsb && printer.PnpStatus) {
-    if (printer.PnpStatus !== "OK") return "offline";
+    if (printer.PnpStatus !== 'OK') return 'offline';
   }
 
-  if (printer.WorkOffline) return "offline";
+  if (printer.WorkOffline) return 'offline';
 
   switch (printer.PrinterStatus) {
     case 3: // Idle
     case 4: // Printing
     case 5: // Warmup
-      return "ready";
+      return 'ready';
     case 7: // Offline
-      return "offline";
+      return 'offline';
     case 6: // Stopped/Error
-      return "error";
+      return 'error';
     default:
-      return "unknown";
+      return 'unknown';
   }
 }
 
 // ── Windows printer type classification ──────────────────────────────────
 
-export type PrinterType = "local" | "network" | "virtual";
+export type PrinterType = 'local' | 'network' | 'virtual';
 
-export function classifyWindowsPrinterType(
-  name: string,
-  portName: string,
-): PrinterType {
+export function classifyWindowsPrinterType(name: string, portName: string): PrinterType {
   const lowerName = name.toLowerCase();
   const lowerPort = portName.toLowerCase();
 
   if (
-    lowerName.includes("pdf") ||
-    lowerName.includes("xps") ||
-    lowerName.includes("onenote") ||
-    lowerName.includes("fax") ||
-    lowerName.includes("print to")
+    lowerName.includes('pdf') ||
+    lowerName.includes('xps') ||
+    lowerName.includes('onenote') ||
+    lowerName.includes('fax') ||
+    lowerName.includes('print to')
   ) {
-    return "virtual";
+    return 'virtual';
   }
 
-  if (
-    lowerPort.startsWith("\\\\") ||
-    lowerPort.includes("ip_") ||
-    lowerPort.startsWith("tcp")
-  ) {
-    return "network";
+  if (lowerPort.startsWith('\\\\') || lowerPort.includes('ip_') || lowerPort.startsWith('tcp')) {
+    return 'network';
   }
 
-  return "local";
+  return 'local';
 }
 
 // ── Job queue parsing ────────────────────────────────────────────────────
 
-export type JobStatus = "printing" | "queued" | "paused" | "error" | "deleting";
+export type JobStatus = 'printing' | 'queued' | 'paused' | 'error' | 'deleting';
 
 export function mapWindowsJobStatus(status: string): JobStatus {
   const lower = status.toLowerCase();
-  if (lower.includes("print") || lower.includes("spool")) return "printing";
-  if (lower.includes("paus")) return "paused";
-  if (
-    lower.includes("error") ||
-    lower.includes("fail") ||
-    lower.includes("blocked")
-  )
-    return "error";
-  if (lower.includes("delet")) return "deleting";
-  return "queued";
+  if (lower.includes('print') || lower.includes('spool')) return 'printing';
+  if (lower.includes('paus')) return 'paused';
+  if (lower.includes('error') || lower.includes('fail') || lower.includes('blocked'))
+    return 'error';
+  if (lower.includes('delet')) return 'deleting';
+  return 'queued';
 }
 
 export function parseWindowsDate(raw: unknown): string {

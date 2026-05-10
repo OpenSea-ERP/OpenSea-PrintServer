@@ -1,16 +1,9 @@
-import { useState, useEffect, useCallback } from "react";
-import {
-  ArrowLeft,
-  Download,
-  Printer,
-  RefreshCw,
-  Unlink,
-  AlertTriangle,
-} from "lucide-react";
-import { Toggle } from "../components/Toggle";
-import { cn } from "../utils";
-import { invokeIpc, useIpcEvent } from "../hooks/useIpc";
-import type { UpdateStatus } from "../preload";
+import { AlertTriangle, ArrowLeft, Download, Printer, RefreshCw, Unlink } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { Toggle } from '../components/Toggle';
+import { invokeIpc, useIpcEvent } from '../hooks/useIpc';
+import type { UpdateStatus } from '../preload';
+import { cn } from '../utils';
 
 interface SettingsProps {
   onBack: () => void;
@@ -22,14 +15,14 @@ export function Settings({ onBack, onUnpair }: SettingsProps) {
   const [minimizeToTray, setMinimizeToTray] = useState(true);
   const [loadingSettings, setLoadingSettings] = useState(true);
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus>({
-    status: "not-available",
+    status: 'not-available',
   });
   const [checkingUpdate, setCheckingUpdate] = useState(false);
-  const [version, setVersion] = useState("1.0.0");
+  const [version, setVersion] = useState('1.0.0');
   const [showUnpairModal, setShowUnpairModal] = useState(false);
 
   useEffect(() => {
-    invokeIpc<string>("app:get-version")
+    invokeIpc<string>('app:get-version')
       .then((v) => setVersion(v))
       .catch(() => {});
   }, []);
@@ -37,9 +30,9 @@ export function Settings({ onBack, onUnpair }: SettingsProps) {
   useEffect(() => {
     (async () => {
       try {
-        const enabled = await invokeIpc<boolean>("auto-launch:is-enabled");
+        const enabled = await invokeIpc<boolean>('auto-launch:is-enabled');
         setAutoLaunch(enabled);
-        const mtVal = await invokeIpc<boolean>("store:get", "minimizeToTray");
+        const mtVal = await invokeIpc<boolean>('store:get', 'minimizeToTray');
         setMinimizeToTray(mtVal ?? true);
       } catch {
         // defaults
@@ -56,14 +49,12 @@ export function Settings({ onBack, onUnpair }: SettingsProps) {
     // we revert. (Codex review fix 2026-05-03.)
     setAutoLaunch(val);
     try {
-      const result = await invokeIpc<{ success: boolean; enabled?: boolean }>(
-        "auto-launch:toggle",
-      );
+      const result = await invokeIpc<{ success: boolean; enabled?: boolean }>('auto-launch:toggle');
       if (!result?.success) {
         setAutoLaunch(!val);
         return;
       }
-      if (typeof result.enabled === "boolean") {
+      if (typeof result.enabled === 'boolean') {
         setAutoLaunch(result.enabled);
       }
     } catch {
@@ -74,19 +65,18 @@ export function Settings({ onBack, onUnpair }: SettingsProps) {
   const handleToggleMinimize = useCallback(async (val: boolean) => {
     setMinimizeToTray(val);
     try {
-      await invokeIpc("store:set", "minimizeToTray", val);
+      await invokeIpc('store:set', 'minimizeToTray', val);
     } catch {
       setMinimizeToTray(!val);
     }
   }, []);
 
   useIpcEvent<UpdateStatus>(
-    "updater:status",
+    'updater:status',
     useCallback((data: UpdateStatus) => {
-      const mapped =
-        data.status === "up-to-date" ? "not-available" : data.status;
-      setUpdateStatus({ ...data, status: mapped as UpdateStatus["status"] });
-      if (mapped !== "checking" && mapped !== "downloading") {
+      const mapped = data.status === 'up-to-date' ? 'not-available' : data.status;
+      setUpdateStatus({ ...data, status: mapped as UpdateStatus['status'] });
+      if (mapped !== 'checking' && mapped !== 'downloading') {
         setCheckingUpdate(false);
       }
     }, []),
@@ -94,18 +84,18 @@ export function Settings({ onBack, onUnpair }: SettingsProps) {
 
   const handleCheckUpdate = useCallback(async () => {
     setCheckingUpdate(true);
-    setUpdateStatus({ status: "checking" });
+    setUpdateStatus({ status: 'checking' });
     try {
-      await invokeIpc("updater:check");
+      await invokeIpc('updater:check');
     } catch {
       setCheckingUpdate(false);
-      setUpdateStatus({ status: "error", error: "Falha ao verificar" });
+      setUpdateStatus({ status: 'error', error: 'Falha ao verificar' });
     }
   }, []);
 
   const handleInstallUpdate = useCallback(async () => {
     try {
-      await invokeIpc("updater:install");
+      await invokeIpc('updater:install');
     } catch {
       // ignore
     }
@@ -113,7 +103,7 @@ export function Settings({ onBack, onUnpair }: SettingsProps) {
 
   const handleConfirmUnpair = useCallback(async () => {
     try {
-      await invokeIpc("agent:unpair");
+      await invokeIpc('agent:unpair');
       setShowUnpairModal(false);
       onUnpair();
     } catch {
@@ -147,9 +137,7 @@ export function Settings({ onBack, onUnpair }: SettingsProps) {
                 <Printer className="h-5 w-5 text-white" strokeWidth={2} />
               </div>
               <div>
-                <p className="text-sm font-semibold text-slate-200">
-                  OpenSea Print Server
-                </p>
+                <p className="text-sm font-semibold text-slate-200">OpenSea Print Server</p>
                 <p className="text-xs text-slate-500">Versão {version}</p>
               </div>
             </div>
@@ -190,25 +178,20 @@ export function Settings({ onBack, onUnpair }: SettingsProps) {
           <div className="bg-slate-800/60 rounded-xl border border-slate-700/50 p-4">
             <div className="flex items-center justify-between mb-3">
               <div>
-                <p className="text-sm font-medium text-slate-200">
-                  Versão {version}
-                </p>
+                <p className="text-sm font-medium text-slate-200">Versão {version}</p>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  {updateStatus.status === "not-available" &&
-                    "Você está na versão mais recente"}
-                  {updateStatus.status === "checking" && "Verificando..."}
-                  {updateStatus.status === "available" &&
+                  {updateStatus.status === 'not-available' && 'Você está na versão mais recente'}
+                  {updateStatus.status === 'checking' && 'Verificando...'}
+                  {updateStatus.status === 'available' &&
                     `Versão ${updateStatus.version} disponível`}
-                  {updateStatus.status === "downloading" &&
+                  {updateStatus.status === 'downloading' &&
                     `Baixando... ${Math.round(updateStatus.progress ?? 0)}%`}
-                  {updateStatus.status === "downloaded" &&
-                    "Atualização pronta para instalar"}
-                  {updateStatus.status === "error" &&
-                    (updateStatus.error || "Erro ao verificar")}
+                  {updateStatus.status === 'downloaded' && 'Atualização pronta para instalar'}
+                  {updateStatus.status === 'error' && (updateStatus.error || 'Erro ao verificar')}
                 </p>
               </div>
             </div>
-            {updateStatus.status === "downloaded" ? (
+            {updateStatus.status === 'downloaded' ? (
               <button
                 onClick={handleInstallUpdate}
                 className="w-full h-9 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-colors"
@@ -228,13 +211,8 @@ export function Settings({ onBack, onUnpair }: SettingsProps) {
                   flex items-center justify-center gap-1.5 transition-colors
                 "
               >
-                <RefreshCw
-                  className={cn(
-                    "h-3.5 w-3.5",
-                    checkingUpdate && "animate-spin",
-                  )}
-                />
-                {checkingUpdate ? "Verificando..." : "Verificar Atualizações"}
+                <RefreshCw className={cn('h-3.5 w-3.5', checkingUpdate && 'animate-spin')} />
+                {checkingUpdate ? 'Verificando...' : 'Verificar Atualizações'}
               </button>
             )}
           </div>
@@ -247,8 +225,8 @@ export function Settings({ onBack, onUnpair }: SettingsProps) {
           </h3>
           <div className="bg-slate-800/60 rounded-xl border border-rose-500/20 p-4">
             <p className="text-xs text-slate-500 mb-3">
-              Desvincular este computador do servidor OpenSea. Será necessário
-              parear novamente para enviar impressões.
+              Desvincular este computador do servidor OpenSea. Será necessário parear novamente para
+              enviar impressões.
             </p>
             <button
               onClick={() => setShowUnpairModal(true)}
@@ -288,9 +266,8 @@ export function Settings({ onBack, onUnpair }: SettingsProps) {
 
               {/* Description */}
               <p className="text-xs text-slate-400 text-center leading-relaxed mb-6">
-                Este computador será desconectado do servidor OpenSea e não
-                receberá mais comandos de impressão. Você precisará parear
-                novamente com um novo código.
+                Este computador será desconectado do servidor OpenSea e não receberá mais comandos
+                de impressão. Você precisará parear novamente com um novo código.
               </p>
 
               {/* Buttons */}

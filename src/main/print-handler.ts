@@ -9,10 +9,10 @@
  * and `print-handler-format.ts` for tempfile + magic-byte detection.
  */
 
-import log from "electron-log";
-import { detectFormat } from "./print-handler-format";
-import { printWindows } from "./print-handler-windows";
-import { printUnix } from "./print-handler-unix";
+import log from 'electron-log';
+import { detectFormat } from './print-handler-format';
+import { printUnix } from './print-handler-unix';
+import { printWindows } from './print-handler-windows';
 
 export interface PrintResult {
   success: boolean;
@@ -27,9 +27,7 @@ export async function executePrint(
   data: Buffer,
   copies: number,
 ): Promise<PrintResult> {
-  log.info(
-    `[Print] Job ${jobId}: ${copies} cop(ies) → "${printerName}" (${data.length} bytes)`,
-  );
+  log.info(`[Print] Job ${jobId}: ${copies} cop(ies) → "${printerName}" (${data.length} bytes)`);
 
   if (!Number.isInteger(copies) || copies < 1 || copies > MAX_COPIES) {
     return {
@@ -38,12 +36,12 @@ export async function executePrint(
     };
   }
 
-  if (!printerName || typeof printerName !== "string") {
-    return { success: false, error: "printerName inválido" };
+  if (!printerName || typeof printerName !== 'string') {
+    return { success: false, error: 'printerName inválido' };
   }
 
   if (!data || data.length === 0) {
-    return { success: false, error: "data vazio" };
+    return { success: false, error: 'data vazio' };
   }
 
   try {
@@ -59,10 +57,10 @@ export async function executePrint(
     log.info(`[Print] Job ${jobId}: formato detectado=${format}`);
 
     switch (process.platform) {
-      case "win32":
+      case 'win32':
         return await printWindows(jobId, printerName, data, copies, format);
-      case "darwin":
-      case "linux":
+      case 'darwin':
+      case 'linux':
         return await printUnix(jobId, printerName, data, copies);
       default:
         return {
@@ -79,14 +77,11 @@ export async function executePrint(
 
 async function printerExists(printerName: string): Promise<boolean> {
   try {
-    const { detectPrinters } = await import("./printer-detector");
+    const { detectPrinters } = await import('./printer-detector');
     const printers = await detectPrinters();
     return printers.some((p) => p.name === printerName);
   } catch (err) {
-    log.warn(
-      "[Print] Falha ao verificar impressora (seguindo mesmo assim):",
-      err,
-    );
+    log.warn('[Print] Falha ao verificar impressora (seguindo mesmo assim):', err);
     return true; // fallback: não bloqueia impressão
   }
 }

@@ -23,9 +23,7 @@ export function Toggle({ enabled, onChange, label, description, disabled }: Togg
     >
       <div className="text-left">
         <span className="text-sm font-medium text-slate-200">{label}</span>
-        {description && (
-          <p className="text-xs text-slate-500 mt-0.5">{description}</p>
-        )}
+        {description && <p className="text-xs text-slate-500 mt-0.5">{description}</p>}
       </div>
       <div
         className={cn(

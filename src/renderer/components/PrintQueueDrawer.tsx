@@ -1,19 +1,19 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  X,
-  Trash2,
-  RotateCcw,
+  AlertCircle,
+  FileText,
+  Loader2,
   Pause,
   Play,
-  FileText,
-  AlertCircle,
-  Loader2,
   Printer,
+  RotateCcw,
+  Trash2,
+  X,
 } from 'lucide-react';
-import { cn } from '../utils';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { invokeIpc } from '../hooks/useIpc';
-import { StatusDot } from './StatusDot';
 import type { PrintJob } from '../preload';
+import { cn } from '../utils';
+import { StatusDot } from './StatusDot';
 
 interface PrintQueueDrawerProps {
   printerName: string;
@@ -57,7 +57,12 @@ function timeAgo(isoDate: string): string {
   return `${hours}h atrás`;
 }
 
-export function PrintQueueDrawer({ printerName, printerStatus, open, onClose }: PrintQueueDrawerProps) {
+export function PrintQueueDrawer({
+  printerName,
+  printerStatus,
+  open,
+  onClose,
+}: PrintQueueDrawerProps) {
   const [jobs, setJobs] = useState<PrintJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
@@ -85,45 +90,60 @@ export function PrintQueueDrawer({ printerName, printerStatus, open, onClose }: 
     };
   }, [open, fetchJobs]);
 
-  const handleCancel = useCallback(async (jobId: number) => {
-    setActionLoading(jobId);
-    try {
-      await invokeIpc('printers:cancel-job', printerName, jobId);
-      await fetchJobs();
-    } catch { /* ignore */ }
-    setActionLoading(null);
-  }, [printerName, fetchJobs]);
+  const handleCancel = useCallback(
+    async (jobId: number) => {
+      setActionLoading(jobId);
+      try {
+        await invokeIpc('printers:cancel-job', printerName, jobId);
+        await fetchJobs();
+      } catch {
+        /* ignore */
+      }
+      setActionLoading(null);
+    },
+    [printerName, fetchJobs],
+  );
 
-  const handleManage = useCallback(async (jobId: number, action: string) => {
-    setActionLoading(jobId);
-    try {
-      await invokeIpc('printers:manage-job', printerName, jobId, action);
-      await fetchJobs();
-    } catch { /* ignore */ }
-    setActionLoading(null);
-  }, [printerName, fetchJobs]);
+  const handleManage = useCallback(
+    async (jobId: number, action: string) => {
+      setActionLoading(jobId);
+      try {
+        await invokeIpc('printers:manage-job', printerName, jobId, action);
+        await fetchJobs();
+      } catch {
+        /* ignore */
+      }
+      setActionLoading(null);
+    },
+    [printerName, fetchJobs],
+  );
 
   const handleClearAll = useCallback(async () => {
     setActionLoading(-1);
     try {
       await invokeIpc('printers:manage-job', printerName, 0, 'clear-all');
       await fetchJobs();
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     setActionLoading(null);
   }, [printerName, fetchJobs]);
 
   const statusDotMap = (s: number) =>
-    s === 0 ? 'online' as const : s === 2 ? 'error' as const : s === 1 ? 'offline' as const : 'warning' as const;
+    s === 0
+      ? ('online' as const)
+      : s === 2
+        ? ('error' as const)
+        : s === 1
+          ? ('offline' as const)
+          : ('warning' as const);
 
   if (!open) return null;
 
   return (
     <>
       {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/40 z-40 transition-opacity"
-        onClick={onClose}
-      />
+      <div className="fixed inset-0 bg-black/40 z-40 transition-opacity" onClick={onClose} />
 
       {/* Drawer */}
       <div className="fixed top-0 right-0 bottom-0 w-80 bg-slate-900 border-l border-slate-700/50 z-50 flex flex-col animate-slide-in-right">
@@ -196,10 +216,7 @@ export function PrintQueueDrawer({ printerName, printerStatus, open, onClose }: 
                 return (
                   <div
                     key={job.id}
-                    className={cn(
-                      'px-4 py-3 transition-opacity',
-                      isActive && 'opacity-50',
-                    )}
+                    className={cn('px-4 py-3 transition-opacity', isActive && 'opacity-50')}
                   >
                     {/* Job info */}
                     <div className="flex items-start gap-2 mb-2">
@@ -208,11 +225,15 @@ export function PrintQueueDrawer({ printerName, printerStatus, open, onClose }: 
                           {job.documentName}
                         </p>
                         <div className="flex items-center gap-2 mt-1">
-                          <span className={cn(
-                            'inline-flex items-center h-4 px-1.5 rounded text-[10px] font-medium border',
-                            STATUS_COLORS[job.status],
-                          )}>
-                            {job.status === 'error' && <AlertCircle className="h-2.5 w-2.5 mr-0.5" />}
+                          <span
+                            className={cn(
+                              'inline-flex items-center h-4 px-1.5 rounded text-[10px] font-medium border',
+                              STATUS_COLORS[job.status],
+                            )}
+                          >
+                            {job.status === 'error' && (
+                              <AlertCircle className="h-2.5 w-2.5 mr-0.5" />
+                            )}
                             {STATUS_LABELS[job.status]}
                           </span>
                           {job.totalPages > 0 && (
@@ -230,7 +251,8 @@ export function PrintQueueDrawer({ printerName, printerStatus, open, onClose }: 
                     {/* Footer: time + actions */}
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] text-slate-600">
-                        {job.userName ? `${job.userName} · ` : ''}{timeAgo(job.submittedAt)}
+                        {job.userName ? `${job.userName} · ` : ''}
+                        {timeAgo(job.submittedAt)}
                       </span>
                       <div className="flex items-center gap-1">
                         {job.status === 'paused' ? (

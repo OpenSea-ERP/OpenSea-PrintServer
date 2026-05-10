@@ -15,15 +15,11 @@
  * the Windows printer queue.
  */
 
-import { writeFile } from "fs/promises";
-import log from "electron-log";
-import {
-  cleanupTempFile,
-  getTempFilePath,
-  type PrintFormat,
-} from "./print-handler-format";
-import { runChild } from "./print-handler-spawn";
-import type { PrintResult } from "./print-handler";
+import log from 'electron-log';
+import { writeFile } from 'fs/promises';
+import type { PrintResult } from './print-handler';
+import { cleanupTempFile, getTempFilePath, type PrintFormat } from './print-handler-format';
+import { runChild } from './print-handler-spawn';
 
 const PDF_TIMEOUT_MS = 60_000;
 const RAW_TIMEOUT_MS = 30_000;
@@ -40,7 +36,7 @@ export async function printWindows(
   try {
     await writeFile(tempPath, data);
 
-    if (format === "pdf") {
+    if (format === 'pdf') {
       return await printWindowsPdf(jobId, printerName, tempPath, copies);
     }
 
@@ -58,15 +54,8 @@ async function printWindowsPdf(
 ): Promise<PrintResult> {
   // Tenta SumatraPDF primeiro (silent print, leve).
   const sumatraRes = await runChild(
-    "SumatraPDF",
-    [
-      "-print-to",
-      printerName,
-      "-print-settings",
-      `${copies}x`,
-      "-silent",
-      filePath,
-    ],
+    'SumatraPDF',
+    ['-print-to', printerName, '-print-settings', `${copies}x`, '-silent', filePath],
     PDF_TIMEOUT_MS,
   );
 
@@ -81,13 +70,13 @@ async function printWindowsPdf(
 
   for (let i = 0; i < copies; i++) {
     const psResult = await runChild(
-      "powershell",
+      'powershell',
       [
-        "-NoProfile",
-        "-NonInteractive",
-        "-Command",
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
         `Start-Process -FilePath $args[0] -Verb PrintTo -ArgumentList $args[1] -Wait -WindowStyle Hidden`,
-        "-args",
+        '-args',
         filePath,
         printerName,
       ],
@@ -101,9 +90,7 @@ async function printWindowsPdf(
     }
   }
 
-  log.info(
-    `[Print] Job ${jobId}: enviado via PowerShell PrintTo (${copies} cópias)`,
-  );
+  log.info(`[Print] Job ${jobId}: enviado via PowerShell PrintTo (${copies} cópias)`);
   return { success: true };
 }
 
@@ -117,13 +104,13 @@ async function printWindowsRaw(
   // concatenação de string para evitar injeção via printerName.
   for (let i = 0; i < copies; i++) {
     const res = await runChild(
-      "powershell",
+      'powershell',
       [
-        "-NoProfile",
-        "-NonInteractive",
-        "-Command",
-        "Get-Content -Path $args[0] -Encoding Byte -Raw | Out-Printer -Name $args[1]",
-        "-args",
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        'Get-Content -Path $args[0] -Encoding Byte -Raw | Out-Printer -Name $args[1]',
+        '-args',
         filePath,
         printerName,
       ],

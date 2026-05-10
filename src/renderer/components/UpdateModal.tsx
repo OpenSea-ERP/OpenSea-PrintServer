@@ -1,6 +1,6 @@
-import { CheckCircle2, Download, AlertCircle, Loader2, X, Waves } from 'lucide-react';
-import { cn } from '../utils';
+import { AlertCircle, CheckCircle2, Download, Loader2, Waves, X } from 'lucide-react';
 import type { UpdateStatus } from '../preload';
+import { cn } from '../utils';
 
 interface UpdateModalProps {
   status: UpdateStatus;
@@ -50,9 +50,7 @@ export function UpdateModal({ status, onClose, onInstall }: UpdateModalProps) {
               </div>
               <div className="text-center">
                 <p className="text-sm font-semibold text-slate-100">Tudo atualizado</p>
-                <p className="text-xs text-slate-500 mt-1">
-                  Você está na versão mais recente.
-                </p>
+                <p className="text-xs text-slate-500 mt-1">Você está na versão mais recente.</p>
               </div>
             </div>
           )}
@@ -64,16 +62,12 @@ export function UpdateModal({ status, onClose, onInstall }: UpdateModalProps) {
                 <Download className="h-6 w-6 text-blue-400" />
               </div>
               <div className="text-center">
-                <p className="text-sm font-semibold text-slate-100">
-                  Nova versão disponível
-                </p>
+                <p className="text-sm font-semibold text-slate-100">Nova versão disponível</p>
                 <p className="text-xs text-slate-500 mt-1">
                   Versão {status.version} está pronta para download.
                 </p>
               </div>
-              <p className="text-xs text-slate-500">
-                O download iniciará automaticamente.
-              </p>
+              <p className="text-xs text-slate-500">O download iniciará automaticamente.</p>
             </div>
           )}
 
@@ -105,9 +99,7 @@ export function UpdateModal({ status, onClose, onInstall }: UpdateModalProps) {
                 <CheckCircle2 className="h-6 w-6 text-emerald-400" />
               </div>
               <div className="text-center">
-                <p className="text-sm font-semibold text-slate-100">
-                  Atualização pronta
-                </p>
+                <p className="text-sm font-semibold text-slate-100">Atualização pronta</p>
                 <p className="text-xs text-slate-500 mt-1">
                   Versão {status.version} foi baixada. Reinicie para aplicar.
                 </p>

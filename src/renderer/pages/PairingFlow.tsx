@@ -1,8 +1,8 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
-import { ArrowLeft, CheckCircle2, AlertCircle, Loader2, QrCode } from 'lucide-react';
+import { AlertCircle, ArrowLeft, CheckCircle2, Loader2, QrCode } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { invokeIpc } from '../hooks/useIpc';
-import { cn } from '../utils';
 import type { PairingResult } from '../preload';
+import { cn } from '../utils';
 
 interface PairingFlowProps {
   onBack: () => void;
@@ -24,20 +24,20 @@ export function PairingFlow({ onBack, onSuccess }: PairingFlowProps) {
   const code = digits.join('');
   const isComplete = code.length === 6 && digits.every((d) => d !== '');
 
-  const handleInput = useCallback(
-    (index: number, value: string) => {
-      const char = value.replace(/[^a-zA-Z0-9]/g, '').slice(-1).toUpperCase();
-      setDigits((prev) => {
-        const next = [...prev];
-        next[index] = char;
-        return next;
-      });
-      if (char && index < 5) {
-        inputRefs.current[index + 1]?.focus();
-      }
-    },
-    [],
-  );
+  const handleInput = useCallback((index: number, value: string) => {
+    const char = value
+      .replace(/[^a-zA-Z0-9]/g, '')
+      .slice(-1)
+      .toUpperCase();
+    setDigits((prev) => {
+      const next = [...prev];
+      next[index] = char;
+      return next;
+    });
+    if (char && index < 5) {
+      inputRefs.current[index + 1]?.focus();
+    }
+  }, []);
 
   const handleKeyDown = useCallback(
     (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -55,7 +55,11 @@ export function PairingFlow({ onBack, onSuccess }: PairingFlowProps) {
 
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
     e.preventDefault();
-    const pasted = e.clipboardData.getData('text').replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 6);
+    const pasted = e.clipboardData
+      .getData('text')
+      .replace(/[^a-zA-Z0-9]/g, '')
+      .toUpperCase()
+      .slice(0, 6);
     if (!pasted) return;
     const newDigits = [...Array(6)].map((_, i) => pasted[i] || '');
     setDigits(newDigits);
@@ -117,8 +121,7 @@ export function PairingFlow({ onBack, onSuccess }: PairingFlowProps) {
             </div>
 
             <p className="text-sm text-slate-400 text-center leading-relaxed mb-8 max-w-xs">
-              Digite o código de pareamento exibido no painel de
-              Impressoras Remotas do OpenSea.
+              Digite o código de pareamento exibido no painel de Impressoras Remotas do OpenSea.
             </p>
 
             {/* Code Input Boxes */}
@@ -126,7 +129,9 @@ export function PairingFlow({ onBack, onSuccess }: PairingFlowProps) {
               {digits.map((digit, i) => (
                 <input
                   key={i}
-                  ref={(el) => { inputRefs.current[i] = el; }}
+                  ref={(el) => {
+                    inputRefs.current[i] = el;
+                  }}
                   type="text"
                   inputMode="text"
                   maxLength={1}
@@ -140,9 +145,7 @@ export function PairingFlow({ onBack, onSuccess }: PairingFlowProps) {
                     'transition-all duration-150',
                     'focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10',
                     'disabled:opacity-50 disabled:cursor-not-allowed',
-                    digit
-                      ? 'border-slate-600 text-slate-100'
-                      : 'border-slate-700 text-slate-500',
+                    digit ? 'border-slate-600 text-slate-100' : 'border-slate-700 text-slate-500',
                   )}
                 />
               ))}
@@ -180,12 +183,8 @@ export function PairingFlow({ onBack, onSuccess }: PairingFlowProps) {
               <CheckCircle2 className="h-8 w-8 text-emerald-400" />
             </div>
             <div className="text-center">
-              <h3 className="text-lg font-bold text-slate-100 mb-1">
-                Vinculado com sucesso
-              </h3>
-              <p className="text-sm text-slate-400">
-                Seu computador foi conectado ao OpenSea.
-              </p>
+              <h3 className="text-lg font-bold text-slate-100 mb-1">Vinculado com sucesso</h3>
+              <p className="text-sm text-slate-400">Seu computador foi conectado ao OpenSea.</p>
             </div>
           </div>
         )}
@@ -196,12 +195,8 @@ export function PairingFlow({ onBack, onSuccess }: PairingFlowProps) {
               <AlertCircle className="h-8 w-8 text-rose-400" />
             </div>
             <div className="text-center">
-              <h3 className="text-lg font-bold text-slate-100 mb-1">
-                Falha na vinculação
-              </h3>
-              <p className="text-sm text-slate-400 max-w-xs">
-                {errorMessage}
-              </p>
+              <h3 className="text-lg font-bold text-slate-100 mb-1">Falha na vinculação</h3>
+              <p className="text-sm text-slate-400 max-w-xs">{errorMessage}</p>
             </div>
             <button
               onClick={handleRetry}

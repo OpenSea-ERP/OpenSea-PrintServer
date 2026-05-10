@@ -5,12 +5,12 @@
  * stream raw bytes straight to the spooler.
  */
 
-import { unlink } from "fs/promises";
-import { tmpdir } from "os";
-import { join } from "path";
-import { randomUUID } from "crypto";
+import { randomUUID } from 'crypto';
+import { unlink } from 'fs/promises';
+import { tmpdir } from 'os';
+import { join } from 'path';
 
-export type PrintFormat = "pdf" | "postscript" | "raw";
+export type PrintFormat = 'pdf' | 'postscript' | 'raw';
 
 export function detectFormat(data: Buffer): PrintFormat {
   if (
@@ -20,17 +20,16 @@ export function detectFormat(data: Buffer): PrintFormat {
     data[2] === 0x44 &&
     data[3] === 0x46
   ) {
-    return "pdf"; // %PDF
+    return 'pdf'; // %PDF
   }
   if (data.length >= 2 && data[0] === 0x25 && data[1] === 0x21) {
-    return "postscript"; // %!
+    return 'postscript'; // %!
   }
-  return "raw";
+  return 'raw';
 }
 
 export function getTempFilePath(format: PrintFormat): string {
-  const ext =
-    format === "pdf" ? ".pdf" : format === "postscript" ? ".ps" : ".prn";
+  const ext = format === 'pdf' ? '.pdf' : format === 'postscript' ? '.ps' : '.prn';
   return join(tmpdir(), `opensea-print-${randomUUID()}${ext}`);
 }
 

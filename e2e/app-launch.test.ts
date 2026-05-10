@@ -1,6 +1,6 @@
-import { test, expect } from '@playwright/test';
-import { launchApp } from './electron-app';
 import type { ElectronApplication, Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
+import { launchApp } from './electron-app';
 
 let app: ElectronApplication;
 let page: Page;

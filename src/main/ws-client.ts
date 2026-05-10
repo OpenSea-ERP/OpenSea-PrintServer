@@ -13,24 +13,25 @@
  * `state: 'disconnected'|'connecting'|'connected'` mapping the renderer
  * already understands.
  */
-import { EventEmitter } from "events";
-import {
-  SatelliteWSClient,
-  type ReleaseEventPayload,
-  type RevokedEventPayload,
-} from "@opensea/satellite-runtime/ws-client";
+
 import type {
   WsAppReleasePublishedMessage,
   WsDeviceRevokedMessage,
   WsWelcomeMessage,
-} from "@opensea/satellite-contract";
+} from '@opensea/satellite-contract';
+import {
+  type ReleaseEventPayload,
+  type RevokedEventPayload,
+  SatelliteWSClient,
+} from '@opensea/satellite-runtime/ws-client';
+import { EventEmitter } from 'events';
 
 // ── Types (preserved for consumers) ──────────────────────────────────────
 
-export type ConnectionState = "disconnected" | "connecting" | "connected";
+export type ConnectionState = 'disconnected' | 'connecting' | 'connected';
 
 export interface PrintCommand {
-  type: "print";
+  type: 'print';
   jobId: string;
   printerName?: string;
   printerId: string;
@@ -39,7 +40,7 @@ export interface PrintCommand {
 }
 
 export interface RequestPrintersCommand {
-  type: "request-printers";
+  type: 'request-printers';
 }
 
 export type PrintIncomingMessage = PrintCommand | RequestPrintersCommand;
@@ -53,13 +54,13 @@ export type IncomingMessage = PrintIncomingMessage | SharedIncomingMessage;
 
 export interface PrinterInfo {
   name: string;
-  type: "local" | "network" | "virtual";
+  type: 'local' | 'network' | 'virtual';
   isDefault: boolean;
-  status: "ONLINE" | "OFFLINE" | "ERROR" | "UNKNOWN";
+  status: 'ONLINE' | 'OFFLINE' | 'ERROR' | 'UNKNOWN';
 }
 
 export interface PrintResultMessage {
-  type: "print-result";
+  type: 'print-result';
   jobId: string;
   success: boolean;
   error?: string;
@@ -67,17 +68,17 @@ export interface PrintResultMessage {
 }
 
 export interface PrintersListMessage {
-  type: "printers";
+  type: 'printers';
   printers: PrinterInfo[];
 }
 
 export interface StatusMessage {
-  type: "status";
-  status: "ONLINE" | "OFFLINE";
+  type: 'status';
+  status: 'ONLINE' | 'OFFLINE';
 }
 
 export interface HeartbeatOutgoingMessage {
-  type: "heartbeat";
+  type: 'heartbeat';
 }
 
 export type OutgoingMessage =
@@ -93,36 +94,32 @@ type MessageHandler = (msg: IncomingMessage) => void;
 const MAX_PAYLOAD = 10 * 1024 * 1024;
 
 const VALID_DEVICE_REVOKED_REASONS = new Set([
-  "unpaired_by_user",
-  "unpaired_by_admin",
-  "force_revoked_by_admin",
+  'unpaired_by_user',
+  'unpaired_by_admin',
+  'force_revoked_by_admin',
 ]);
 
-const VALID_RELEASE_KINDS = new Set(["EMPORION", "PRINT_SERVER", "HORUS"]);
+const VALID_RELEASE_KINDS = new Set(['EMPORION', 'PRINT_SERVER', 'HORUS']);
 
 function isValidPrintMessage(raw: unknown): raw is PrintIncomingMessage {
-  if (!raw || typeof raw !== "object") return false;
+  if (!raw || typeof raw !== 'object') return false;
   const msg = raw as { type?: unknown };
-  if (msg.type === "request-printers") return true;
-  if (msg.type === "print") {
+  if (msg.type === 'request-printers') return true;
+  if (msg.type === 'print') {
     const m = raw as Record<string, unknown>;
     const hasPrinterName =
-      typeof m.printerName === "string" &&
-      m.printerName.length > 0 &&
-      m.printerName.length <= 256;
+      typeof m.printerName === 'string' && m.printerName.length > 0 && m.printerName.length <= 256;
     const hasPrinterId =
-      typeof m.printerId === "string" &&
-      m.printerId.length > 0 &&
-      m.printerId.length <= 256;
+      typeof m.printerId === 'string' && m.printerId.length > 0 && m.printerId.length <= 256;
     return (
-      typeof m.jobId === "string" &&
+      typeof m.jobId === 'string' &&
       m.jobId.length > 0 &&
       m.jobId.length <= 128 &&
       (hasPrinterName || hasPrinterId) &&
-      typeof m.data === "string" &&
+      typeof m.data === 'string' &&
       m.data.length > 0 &&
       m.data.length <= MAX_PAYLOAD &&
-      typeof m.copies === "number" &&
+      typeof m.copies === 'number' &&
       Number.isInteger(m.copies) &&
       m.copies >= 1 &&
       m.copies <= 999
@@ -132,31 +129,28 @@ function isValidPrintMessage(raw: unknown): raw is PrintIncomingMessage {
 }
 
 function isValidSharedMessage(raw: unknown): raw is SharedIncomingMessage {
-  if (!raw || typeof raw !== "object") return false;
+  if (!raw || typeof raw !== 'object') return false;
   const msg = raw as Record<string, unknown>;
-  if (msg.type === "welcome") {
-    return (
-      typeof msg.terminalId === "string" &&
-      typeof msg.protocolVersion === "string"
-    );
+  if (msg.type === 'welcome') {
+    return typeof msg.terminalId === 'string' && typeof msg.protocolVersion === 'string';
   }
-  if (msg.type === "app.release.published") {
+  if (msg.type === 'app.release.published') {
     return (
-      typeof msg.kind === "string" &&
+      typeof msg.kind === 'string' &&
       VALID_RELEASE_KINDS.has(msg.kind) &&
-      typeof msg.version === "string" &&
-      typeof msg.downloadUrl === "string" &&
-      typeof msg.sha256 === "string" &&
+      typeof msg.version === 'string' &&
+      typeof msg.downloadUrl === 'string' &&
+      typeof msg.sha256 === 'string' &&
       msg.sha256.length === 64 &&
-      typeof msg.releasedAt === "string"
+      typeof msg.releasedAt === 'string'
     );
   }
-  if (msg.type === "device.revoked") {
+  if (msg.type === 'device.revoked') {
     return (
-      typeof msg.reason === "string" &&
+      typeof msg.reason === 'string' &&
       VALID_DEVICE_REVOKED_REASONS.has(msg.reason) &&
-      typeof msg.revokedAt === "string" &&
-      typeof msg.revokedBy === "object" &&
+      typeof msg.revokedAt === 'string' &&
+      typeof msg.revokedBy === 'object' &&
       msg.revokedBy !== null
     );
   }
@@ -178,14 +172,11 @@ export function isValidIncomingMessage(raw: unknown): raw is IncomingMessage {
 // ── Wrapper class ────────────────────────────────────────────────────────
 
 export class PrintServerWSClient extends EventEmitter {
-  private inner: SatelliteWSClient<
-    PrintIncomingMessage,
-    OutgoingMessage
-  > | null = null;
-  private apiUrl: string = "";
-  private agentToken: string = "";
+  private inner: SatelliteWSClient<PrintIncomingMessage, OutgoingMessage> | null = null;
+  private apiUrl: string = '';
+  private agentToken: string = '';
   private messageHandler: MessageHandler | null = null;
-  private _state: ConnectionState = "disconnected";
+  private _state: ConnectionState = 'disconnected';
 
   get state(): ConnectionState {
     return this._state;
@@ -207,32 +198,31 @@ export class PrintServerWSClient extends EventEmitter {
 
     this.inner = new SatelliteWSClient<PrintIncomingMessage, OutgoingMessage>({
       buildUrl: () => this.apiUrl,
-      auth: { kind: "bearer-header", token: () => this.agentToken },
+      auth: { kind: 'bearer-header', token: () => this.agentToken },
       heartbeat: {
         intervalMs: 20000,
         pongTimeoutMs: 10000,
-        appHeartbeat: () => ({ type: "heartbeat" }),
+        appHeartbeat: () => ({ type: 'heartbeat' }),
       },
-      validateIncoming: (raw) =>
-        isValidPrintMessage(raw) ? (raw as PrintIncomingMessage) : null,
+      validateIncoming: (raw) => (isValidPrintMessage(raw) ? (raw as PrintIncomingMessage) : null),
       onDomainMessage: (msg) => {
         // Forward to legacy onMessage callback so main.ts dispatches stay unchanged.
         this.messageHandler?.(msg as IncomingMessage);
-        this.emit("message", msg);
+        this.emit('message', msg);
       },
       routeShared: true,
-      satelliteKind: "PRINT_SERVER",
-      logScope: "print-server/ws",
+      satelliteKind: 'PRINT_SERVER',
+      logScope: 'print-server/ws',
     });
 
-    this.inner.on("state", (state) => this.setState(this.mapState(state)));
-    this.inner.on("release", (release: ReleaseEventPayload) => {
-      this.emit("release", release);
+    this.inner.on('state', (state) => this.setState(this.mapState(state)));
+    this.inner.on('release', (release: ReleaseEventPayload) => {
+      this.emit('release', release);
     });
-    this.inner.on("revoked", (revoked: RevokedEventPayload) => {
-      this.emit("revoked", revoked);
+    this.inner.on('revoked', (revoked: RevokedEventPayload) => {
+      this.emit('revoked', revoked);
     });
-    this.inner.on("error", (err) => this.emit("error", err));
+    this.inner.on('error', (err) => this.emit('error', err));
 
     this.inner.connect();
   }
@@ -241,7 +231,7 @@ export class PrintServerWSClient extends EventEmitter {
     if (!this.inner) return;
     this.inner.destroy();
     this.inner = null;
-    this.setState("disconnected");
+    this.setState('disconnected');
   }
 
   send(message: OutgoingMessage): boolean {
@@ -252,23 +242,23 @@ export class PrintServerWSClient extends EventEmitter {
   private setState(state: ConnectionState): void {
     if (this._state === state) return;
     this._state = state;
-    this.emit("state", state);
+    this.emit('state', state);
   }
 
   private mapState(
     runtimeState:
-      | "idle"
-      | "waiting-auth"
-      | "connecting"
-      | "connected"
-      | "reconnecting"
-      | "error"
-      | "closed",
+      | 'idle'
+      | 'waiting-auth'
+      | 'connecting'
+      | 'connected'
+      | 'reconnecting'
+      | 'error'
+      | 'closed',
   ): ConnectionState {
-    if (runtimeState === "connected") return "connected";
-    if (runtimeState === "connecting" || runtimeState === "reconnecting") {
-      return "connecting";
+    if (runtimeState === 'connected') return 'connected';
+    if (runtimeState === 'connecting' || runtimeState === 'reconnecting') {
+      return 'connecting';
     }
-    return "disconnected";
+    return 'disconnected';
   }
 }

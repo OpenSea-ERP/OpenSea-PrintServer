@@ -1,7 +1,7 @@
 import { exec } from 'child_process';
-import { promisify } from 'util';
-import net from 'net';
 import log from 'electron-log';
+import net from 'net';
+import { promisify } from 'util';
 
 const execAsync = promisify(exec);
 
@@ -64,8 +64,8 @@ export function clearPrinterCache(): void {
 // ── TCP port probe ──────────────────────────────────────────────────────────
 
 const PROBE_TIMEOUT_MS = 1500;
-const RAW_PORT = 9100;  // Porta padrão de impressão raw (JetDirect)
-const IPP_PORT = 631;   // IPP
+const RAW_PORT = 9100; // Porta padrão de impressão raw (JetDirect)
+const IPP_PORT = 631; // IPP
 
 /**
  * Tenta abrir uma conexão TCP ao IP da impressora.
@@ -109,7 +109,7 @@ function extractIpFromPort(portName: string): string | null {
   // Remover prefixos comuns
   const cleaned = portName
     .replace(/^(IP_|TCP_|TCPMON:|WSD-)/i, '')
-    .split('_')[0]  // pegar só o IP antes de sufixos como _1
+    .split('_')[0] // pegar só o IP antes de sufixos como _1
     .trim();
 
   // IPv4 basic check
@@ -137,7 +137,9 @@ async function probeNetworkPrinters(
     if (ippOk) return; // Online via IPP
 
     // Nenhuma porta respondeu — impressora offline
-    log.debug(`[Printer] "${printer.name}" (${ip}) não respondeu TCP ${RAW_PORT}/${IPP_PORT} — marcando offline`);
+    log.debug(
+      `[Printer] "${printer.name}" (${ip}) não respondeu TCP ${RAW_PORT}/${IPP_PORT} — marcando offline`,
+    );
     printer.status = 'offline';
   });
 
@@ -246,7 +248,9 @@ async function detectWindowsPrinters(): Promise<DetectedPrinter[]> {
   }
 }
 
-function mapWindowsStatusWithPnp(printer: Win32PrinterRaw & { PnpStatus?: string }): DetectedPrinter['status'] {
+function mapWindowsStatusWithPnp(
+  printer: Win32PrinterRaw & { PnpStatus?: string },
+): DetectedPrinter['status'] {
   const isUsb = (printer.PortName ?? '').toUpperCase().startsWith('USB');
 
   // USB: PnP device status é o mais confiável
@@ -350,7 +354,10 @@ async function detectUnixPrinters(): Promise<DetectedPrinter[]> {
       timeout: 10_000,
     });
 
-    const lines = stdout.trim().split('\n').filter((l) => l.length > 0);
+    const lines = stdout
+      .trim()
+      .split('\n')
+      .filter((l) => l.length > 0);
     const printers: DetectedPrinter[] = [];
     let defaultPrinter: string | null = null;
 
@@ -427,9 +434,7 @@ async function detectUnixPrinters(): Promise<DetectedPrinter[]> {
     }
 
     // TCP probe para impressoras de rede no Unix
-    const networkReady = printers.filter(
-      (p) => p.type === 'network' && p.status === 'ready',
-    );
+    const networkReady = printers.filter((p) => p.type === 'network' && p.status === 'ready');
     if (networkReady.length > 0) {
       // No Unix, extrair IP da URI (ipp://192.168.1.100:631)
       const probeTargets: Array<{ printer: DetectedPrinter; portName: string }> = [];
