@@ -1,3 +1,6 @@
+// MUST be first import — sets `app.name` e `userData` antes que electron-log,
+// single-instance, secure-store ou Chromium queriem o path. Ver app-bootstrap.ts.
+import './app-bootstrap';
 import path from 'node:path';
 import {
   disableAutoLaunch,
@@ -19,7 +22,7 @@ import {
   setupUpdater,
 } from '@opensea/satellite-runtime/updater';
 import { restoreWindowState } from '@opensea/satellite-runtime/window-state';
-import { app, BrowserWindow, Menu, Notification } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, Notification } from 'electron';
 import { setConnected } from './connection-state';
 import { registerIpcHandlers } from './ipc-handlers';
 import { executePrint } from './print-handler';
@@ -281,9 +284,8 @@ function createWindow(): BrowserWindow {
     width: 440,
     height: 780,
     resizable: false,
-    frame: true,
+    frame: false,                  // custom titlebar from satellite-ui AppWindow
     autoHideMenuBar: true,
-    titleBarStyle: 'default',
     icon: getAssetPath('icon.png'),
     show: !wasOpenedAsHidden,
     skipTaskbar: wasOpenedAsHidden,
@@ -304,6 +306,13 @@ function createWindow(): BrowserWindow {
   if (!app.isPackaged) {
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   }
+
+  // Notifica o renderer quando a janela é maximizada ou restaurada.
+  // Consumido pelo AppWindow do @opensea/satellite-ui via `windowApi.onMaximizedChange`.
+  mainWindow.on('maximize', () => mainWindow?.webContents.send('window:maximized-change', true));
+  mainWindow.on('unmaximize', () =>
+    mainWindow?.webContents.send('window:maximized-change', false),
+  );
 
   mainWindow.on('close', (event) => {
     if (!isQuitting && store.get('minimizeToTray')) {

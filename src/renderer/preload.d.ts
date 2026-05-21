@@ -47,6 +47,8 @@ export interface UpdateStatus {
   progress?: number;
 }
 
+import type { WindowApi } from '@opensea/satellite-ui';
+
 export interface ElectronAPI {
   invoke: <T = unknown>(channel: string, ...args: unknown[]) => Promise<T>;
   on: (channel: string, callback: (...args: unknown[]) => void) => () => void;
@@ -56,5 +58,7 @@ export interface ElectronAPI {
 declare global {
   interface Window {
     electronAPI: ElectronAPI;
+    /** Bridge para o AppWindow do @opensea/satellite-ui. */
+    windowApi: WindowApi;
   }
 }

@@ -350,6 +350,24 @@ function registerIpcHandlers(): void {
     return app.getVersion();
   });
 
+  // ── Window Controls (AppWindow do @opensea/satellite-ui) ──────────────
+  // frame:false — a barra de título nativa foi removida; os controles de
+  // janela são renderizados pelo AppWindow no renderer.
+  ipcMain.handle('window:minimize', () => {
+    const win = BrowserWindow.getFocusedWindow();
+    win?.minimize();
+  });
+  ipcMain.handle('window:toggle-maximize', () => {
+    const win = BrowserWindow.getFocusedWindow();
+    if (!win) return;
+    if (win.isMaximized()) win.unmaximize();
+    else win.maximize();
+  });
+  ipcMain.handle('window:close', () => {
+    const win = BrowserWindow.getFocusedWindow();
+    win?.close();
+  });
+
   log.info('[ipc] Todos os handlers IPC registrados');
 }
 

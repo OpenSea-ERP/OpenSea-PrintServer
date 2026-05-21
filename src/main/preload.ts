@@ -5,6 +5,7 @@
  */
 
 import { contextBridge, ipcRenderer } from 'electron';
+import type { WindowApi } from '@opensea/satellite-ui';
 
 const INVOKE_CHANNELS = new Set<string>([
   'store:get',
@@ -34,6 +35,9 @@ const EVENT_CHANNELS = new Set<string>([
   // without waiting for the next reconnect attempt to surface the 4003
   // close code visibly.
   'device:revoked',
+  // Emitted by main when BrowserWindow maximizes/restores.
+  // Consumed by AppWindow from @opensea/satellite-ui via `windowApi.onMaximizedChange`.
+  'window:maximized-change',
 ]);
 
 function assertInvoke(channel: string): void {
@@ -103,3 +107,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   getVersion: () => ipcRenderer.invoke('app:get-version'),
 });
+
+// ─── WindowApi — bridge para o AppWindow do @opensea/satellite-ui ─────────
+// Exposto separadamente do `window.electronAPI` para satisfazer o contrato
+// `WindowApi` do satellite-ui. Os handlers IPC correspondentes estão em
+// ipc-handlers.ts (window:minimize/toggle-maximize/close).
+const windowApi: WindowApi = {
+  minimize: () => {
+    ipcRenderer.invoke('window:minimize');
+  },
+  maximize: () => {
+    ipcRenderer.invoke('window:toggle-maximize');
+  },
+  close: () => {
+    ipcRenderer.invoke('window:close');
+  },
+  onMaximizedChange: (cb) => {
+    const listener = (_e: Electron.IpcRendererEvent, maximized: boolean) => cb(maximized);
+    ipcRenderer.on('window:maximized-change', listener);
+    return () => ipcRenderer.removeListener('window:maximized-change', listener);
+  },
+};
+contextBridge.exposeInMainWorld('windowApi', windowApi);

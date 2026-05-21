@@ -1,3 +1,5 @@
+@import '@opensea/satellite-ui/tokens/styles.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

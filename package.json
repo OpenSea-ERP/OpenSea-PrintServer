@@ -34,6 +34,7 @@
   "dependencies": {
     "@opensea/satellite-contract": "git+https://github.com/OpenSea-ERP/OpenSea-Satellite-Contract.git#v0.1.0",
     "@opensea/satellite-runtime": "git+https://github.com/OpenSea-ERP/OpenSea-Satellite-Runtime.git#v1.0.0",
+    "@opensea/satellite-ui": "git+ssh://git@github.com:OpenSea-ERP/OpenSea-Satellite-UI.git#v0.4.0",
     "auto-launch": "^5.0.6",
     "electron-log": "^5.1.7",
     "electron-store": "^8.2.0",

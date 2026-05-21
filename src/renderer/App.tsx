@@ -1,3 +1,4 @@
+import { AppWindow, useTheme } from '@opensea/satellite-ui';
 import { Printer } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { UpdateModal } from './components/UpdateModal';
@@ -15,6 +16,14 @@ export function App() {
   const [status, setStatus] = useState<AgentStatus | null>(null);
   const [updateModal, setUpdateModal] = useState<UpdateStatus | null>(null);
   const [manualUpdateCheck, setManualUpdateCheck] = useState(false);
+
+  // Sync data-sat-{theme,density} no documentElement para que os tokens CSS
+  // do satellite-ui cascateiem. Lê do ThemeProvider (main.tsx) — single source of truth.
+  const { colorMode, density } = useTheme();
+  useEffect(() => {
+    document.documentElement.setAttribute('data-sat-theme', colorMode);
+    document.documentElement.setAttribute('data-sat-density', density);
+  }, [colorMode, density]);
 
   useIpcEvent(
     'updater:manual-check',
@@ -101,36 +110,38 @@ export function App() {
   }, []);
 
   return (
-    <div className="h-full flex flex-col bg-slate-900 overflow-hidden relative">
-      {updateModal && (
-        <UpdateModal
-          status={updateModal}
-          onClose={() => setUpdateModal(null)}
-          onInstall={async () => {
-            try {
-              await invokeIpc('updater:install');
-            } catch {}
-          }}
-        />
-      )}
-      <div className="flex-1 overflow-hidden">
-        {view === 'loading' && <LoadingScreen />}
-        {view === 'empty' && <EmptyState onStartPairing={() => setView('pairing')} />}
-        {view === 'pairing' && (
-          <PairingFlow onBack={() => setView('empty')} onSuccess={handlePairingSuccess} />
-        )}
-        {view === 'dashboard' && status && (
-          <Dashboard
-            status={status}
-            onRefreshStatus={checkStatus}
-            onOpenSettings={() => setView('settings')}
+    <AppWindow title="PrintServer" windowApi={window.windowApi}>
+      <div className="h-full flex flex-col bg-slate-900 overflow-hidden relative">
+        {updateModal && (
+          <UpdateModal
+            status={updateModal}
+            onClose={() => setUpdateModal(null)}
+            onInstall={async () => {
+              try {
+                await invokeIpc('updater:install');
+              } catch {}
+            }}
           />
         )}
-        {view === 'settings' && (
-          <Settings onBack={() => setView('dashboard')} onUnpair={handleUnpair} />
-        )}
+        <div className="flex-1 overflow-hidden">
+          {view === 'loading' && <LoadingScreen />}
+          {view === 'empty' && <EmptyState onStartPairing={() => setView('pairing')} />}
+          {view === 'pairing' && (
+            <PairingFlow onBack={() => setView('empty')} onSuccess={handlePairingSuccess} />
+          )}
+          {view === 'dashboard' && status && (
+            <Dashboard
+              status={status}
+              onRefreshStatus={checkStatus}
+              onOpenSettings={() => setView('settings')}
+            />
+          )}
+          {view === 'settings' && (
+            <Settings onBack={() => setView('dashboard')} onUnpair={handleUnpair} />
+          )}
+        </div>
       </div>
-    </div>
+    </AppWindow>
   );
 }
 
