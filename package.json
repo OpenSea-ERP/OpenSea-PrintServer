@@ -32,6 +32,7 @@
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
+    "@opensea/realtime": "file:../OpenSea-Realtime",
     "@opensea/satellite-contract": "git+https://github.com/OpenSea-ERP/OpenSea-Satellite-Contract.git#v0.1.0",
     "@opensea/satellite-runtime": "git+https://github.com/OpenSea-ERP/OpenSea-Satellite-Runtime.git#v1.0.0",
     "@opensea/satellite-ui": "git+ssh://git@github.com:OpenSea-ERP/OpenSea-Satellite-UI.git#v0.4.0",
@@ -40,6 +41,7 @@
     "electron-store": "^8.2.0",
     "electron-updater": "^6.2.1",
     "keytar": "^7.9.0",
+    "socket.io-client": "^4.8.3",
     "ws": "^8.16.0",
     "zod": "^3.23.0"
   },
