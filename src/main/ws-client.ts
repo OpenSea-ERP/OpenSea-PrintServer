@@ -15,10 +15,11 @@
  * Heartbeat + reconnect: built into Socket.IO (pingInterval/pingTimeout +
  * exponential backoff). Manual heartbeat and reconnect logic removed.
  *
- * Dual-listen: both legacy names (app.release.published, device.revoked) and
- * new SDK names (admin.releases.satellite.published,
- * sales.pos.terminal.revoked) are registered. The 'sales.printing.job.created'
- * SDK event maps to the legacy 'print' command shape expected by main.ts.
+ * Event names: only the canonical SDK names are registered (legacy dual-listen removed).
+ * 'sales.pos.terminal.revoked', 'admin.releases.satellite.published', and
+ * 'sales.printing.job.created' are the single authoritative event names.
+ * The direct 'print' socket event (dispatched by the API via toDevice()) is also
+ * handled for inline label print jobs.
  *
  * send() now delegates to socket.emit() for non-heartbeat messages (heartbeat
  * is built into Socket.IO; outgoing { type: 'heartbeat' } messages are silently
@@ -234,44 +235,37 @@ export class PrintServerWSClient extends EventEmitter {
       this.setState('connected');
     });
 
-    // ── Release published — dual-listen (legacy + new SDK name) ──────────
+    // ── Release published — SDK event name only (legacy 'app.release.published' removed) ─
     const handleRelease = (payload: unknown): void => {
       const p = payload as Record<string, unknown> | null;
       if (!p || typeof p !== 'object') return;
       if (p.kind !== 'PRINT_SERVER') return;
       this.emit('release', p);
     };
-    this.socket.on('app.release.published', handleRelease);
     this.socket.on(
       'admin.releases.satellite.published',
       (payload: EventPayload<'admin.releases.satellite.published'>) => handleRelease(payload),
     );
 
-    // ── Device revoked — dual-listen (legacy + new SDK name) ─────────────
+    // ── Device revoked — SDK event name only (legacy 'device.revoked' removed) ─
     const handleRevoked = (payload: unknown): void => {
       this.emit('revoked', payload ?? {});
     };
-    this.socket.on('device.revoked', handleRevoked);
     this.socket.on(
       'sales.pos.terminal.revoked',
       (payload: EventPayload<'sales.pos.terminal.revoked'>) => handleRevoked(payload),
     );
 
-    // ── Print job — SDK event + legacy 'print' direct event ──────────────
-    // 'sales.printing.job.created' carries { jobId, printerId, printerName, copies }
-    // but NOT the `data` (ESC/POS payload). Legacy 'print' carries `data`.
-    // We listen to both so the transition from legacy WS to /devices namespace
-    // is safe. When only the SDK event arrives, main.ts will need to fetch
-    // the print data via HTTP (future work); for now we forward the event so
-    // it can be dispatched similarly to the legacy path.
+    // ── Print job — SDK event name only (legacy 'print' direct event removed) ─
+    // 'sales.printing.job.created' carries { jobId, printerId, printerName, copies }.
+    // The API now dispatches print commands exclusively via this event and also
+    // via 'print' emitted directly to the device room (see v1-create-label-print-job
+    // controller) — the controller emits the 'print' event type but via toDevice()
+    // on the Socket.IO /devices namespace, so it arrives here as a socket.io event.
     this.socket.on(
       'sales.printing.job.created',
       (payload: EventPayload<'sales.printing.job.created'>) => {
         // Map SDK event to the legacy IncomingMessage shape expected by main.ts.
-        // The legacy 'print' type requires a `data` field — when the backend
-        // sends 'sales.printing.job.created' only (no accompanying raw print
-        // data), we synthesize an empty data so main.ts can still dispatch
-        // the message and handle the job-not-found case gracefully.
         const msg: PrintCommand = {
           type: 'print',
           jobId: payload.jobId,
@@ -285,8 +279,8 @@ export class PrintServerWSClient extends EventEmitter {
       },
     );
 
-    // Legacy direct 'print' and 'request-printers' events — kept for servers
-    // that have not yet migrated to the SDK event names.
+    // Direct 'print' event from API (dispatched via toDevice() by v1-create-label-print-job).
+    // This is the primary path for label print jobs when `data` is included inline.
     this.socket.on('print', (raw: unknown) => {
       if (!isValidPrintMessage(raw)) return;
       this.messageHandler?.(raw);
